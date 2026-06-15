@@ -8,7 +8,7 @@ place that knows a rail's response shape (PRD §11, bound-don't-build).
 | Adapter | Rail | Extract | Gap | Status | Live needs |
 | --- | --- | --- | --- | --- | --- |
 | [`stripe-adapter`](stripe-adapter/) | Stripe **test-mode** | Charge `amount_captured` → cents | **AGENT-PAY-1** | **BUILT** — `node stripe-adapter/test.mjs` is green | `STRIPE_API_KEY` (`sk_test_…`) in the gateway custody vault (live charge only) |
-| `x402-adapter` | x402 / **USDC base-sepolia testnet** | `SettlementResponse` + `PaymentRequirements.maxAmountRequired` (atomic USDC, 6 decimals) → cents | **AGENT-PAY-2** | to build | ⚠️ a **funded USDC testnet wallet** (base-sepolia) + an x402 facilitator URL — a key alone does NOT cover this |
+| [`x402-adapter`](x402-adapter/) | x402 / **USDC base-sepolia testnet** | `SettlementResponse` + `PaymentRequirements.maxAmountRequired` (atomic USDC, 6 decimals) → cents | **AGENT-PAY-2** | **BUILT** — `node x402-adapter/test.mjs` is green | ⚠️ a **funded USDC testnet wallet** (base-sepolia) + an x402 facilitator URL — a key alone does NOT cover this |
 
 **The contract is the suite, not this directory.** Build each adapter against the
 recorded rail-response fixtures and the probes in

@@ -1,0 +1,17 @@
+{
+  "name": "@auths/x402-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Testnet-flagged x402/USDC settle MCP server — wraps an x402 facilitator on base-sepolia and returns the SettlementResponse + PaymentRequirements the auths-mcp gateway extracts the metered cost (maxAmountRequired, atomic USDC → cents) from and meters into the SAME cross-rail cap as Stripe (AGENT-PAY-2, PRD §11 bound-don't-build). LIVE settle needs a funded base-sepolia USDC testnet wallet + facilitator — a key alone does NOT cover x402.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "auths-x402-adapter": "server.mjs"
+  },
+  "scripts": {
+    "test": "node test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
