@@ -1,0 +1,30 @@
+site_name: auths-mcp
+site_description: >-
+  The bounded-agent MCP gateway — how to connect and configure the AI and
+  payment providers it brokers.
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - content.code.copy
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - AI Providers:
+      - ai-providers/index.md
+      - Anthropic (Claude): ai-providers/anthropic.md
+  - Payment Providers:
+      - payment-providers/index.md
+      - Stripe: payment-providers/stripe.md
+      - x402 / USDC: payment-providers/x402.md

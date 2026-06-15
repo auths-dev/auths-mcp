@@ -1,12 +1,14 @@
-# Payments — the cross-rail credit-limit flagship (scaffold)
+# Payments — the cross-rail credit-limit flagship
 
-> **Status: SCAFFOLD ONLY — the adapters are NOT implemented here.** This directory
-> is the *home the burndown builds into*. The executable contract for these claims
-> lives in the recurve suite (`auths/.recurve/claims/auths-mcp/`): the gaps
-> **AGENT-PAY-1**, **AGENT-PAY-2**, **AGENT-MCP-8**, their HERMETIC probes, traps, and
-> the recorded rail-response fixtures. Those baseline **RED** today (the cost
-> extraction / the live-wire counter parity / the adapters are not built — correct
-> and expected). Build them down; do not add ad-hoc code that drifts from the probes.
+> **Status: BUILT — the adapters are implemented and the claims are closed.**
+> **AGENT-PAY-1** (Stripe), **AGENT-PAY-2** (x402), and **AGENT-MCP-8** (live-wire counter
+> parity) are **GREEN**; the rail adapters live in `adapters/stripe-adapter` and
+> `adapters/x402-adapter`. The executable contract is still the recurve suite
+> (`auths/.recurve/claims/auths-mcp/`): the gaps, their HERMETIC probes, traps, and the
+> recorded rail-response fixtures — do not add ad-hoc code that drifts from the probes. The
+> hermetic gate is green **with no keys**; the **live legs are deferred evidence** (a Stripe
+> test key, the Anthropic key, and an x402 base-sepolia testnet wallet + facilitator).
+> **Setup: see the `docs/` mkdocs site at the repo root.**
 
 This is the flagship example of the whole product (PRD §11): **one agent, one `$5`
 authority, spending across a Stripe test-mode rail *and* an x402/USDC-testnet rail at
