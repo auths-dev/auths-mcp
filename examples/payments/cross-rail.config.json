@@ -1,0 +1,28 @@
+{
+  "//": "PLACEHOLDER SHAPE (scaffold — not wired). The cross-rail credit-limit flagship (PRD §11): ONE $5 authority spanning a Stripe TEST-MODE rail AND an x402/USDC base-sepolia TESTNET rail. The combined cross-rail spend is capped at $5; the next call on EITHER rail past the combined cap is refused usage-cap-exceeded before the rail is touched. Config keys are pinned during the build against the AGENT-PAY-1/2 probes + recorded rail-response fixtures. The rails are WRAPPED downstream MCP servers; auths-mcp-core holds zero payment code.",
+  "scenario": "payments-cross-rail",
+  "grant": { "scope": ["paid.call"], "budget": "$5.00", "ttl": "30m" },
+  "rails": {
+    "stripe": {
+      "//": "Stripe TEST-MODE charge rail. Adapter: adapters/stripe-adapter (extracts amount_captured, cents). LIVE: needs STRIPE_API_KEY (sk_test_…) in the gateway's custody vault, never the agent.",
+      "command": "npx",
+      "args": ["-y", "@stripe/mcp", "--tools=all"],
+      "custody_credential": "STRIPE_API_KEY",
+      "cost_extract": "charge.amount_captured"
+    },
+    "x402": {
+      "//": "x402 / USDC base-sepolia TESTNET rail. Adapter: adapters/x402-adapter (extracts SettlementResponse / PaymentRequirements.maxAmountRequired, atomic USDC 6 decimals → cents). LIVE: needs a FUNDED USDC TESTNET WALLET (base-sepolia) + an x402 facilitator URL — OUT OF HERMETIC SCOPE, deferred evidence.",
+      "command": "npx",
+      "args": ["-y", "@example/x402-mcp-server"],
+      "custody_credential": "X402_WALLET_PRIVATE_KEY",
+      "network": "base-sepolia",
+      "asset_decimals": 6,
+      "cost_extract": "requirements.maxAmountRequired"
+    }
+  },
+  "expect_refusal": {
+    "//": "the call that would reserve PAST $5 across rails is refused before the rail is touched, even when the per-rail silo reads in-budget (the moat)",
+    "tool": "paid_call",
+    "verdict": "usage-cap-exceeded"
+  }
+}

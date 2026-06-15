@@ -1,0 +1,11 @@
+{
+  "//": "PLACEHOLDER SHAPE (scaffold — not wired). Attenuation (PRD §11): a SUB-AGENT handed a $2 slice of the parent's $5 cross-rail authority provably cannot exceed $2 on ANY rail — the slice is a cryptographic attenuation a non-trusting party can verify offline, not a processor's say-so. Config keys pinned during the build against the probes.",
+  "scenario": "payments-subagent-slice",
+  "parent_grant": { "scope": ["paid.call"], "budget": "$5.00", "ttl": "30m" },
+  "subagent_grant": { "scope": ["paid.call"], "budget": "$2.00", "ttl": "30m", "//": "⊆ the parent's $5 — the verifier enforces subset; the sub-agent cannot widen it" },
+  "expect_refusal": {
+    "//": "the sub-agent's call past its $2 slice is refused usage-cap-exceeded on either rail, even though the parent's $5 has room",
+    "tool": "paid_call",
+    "verdict": "usage-cap-exceeded"
+  }
+}

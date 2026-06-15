@@ -32,3 +32,12 @@ O(1)-product collapse.
 > **Status: placeholders.** Config keys and the recorded transcript are pinned
 > during the build (the broker + replay scenarios). The shapes here show the
 > intended surface.
+
+## The payments flagship (`payments/` — scaffold)
+
+The cross-rail credit-limit flagship (PRD §11): **one agent, one `$5` authority across
+a Stripe test-mode rail *and* an x402/USDC-testnet rail**. The executable contract is
+the recurve suite (gaps **AGENT-PAY-1**, **AGENT-PAY-2**, **AGENT-MCP-8** + hermetic
+probes + recorded rail-response fixtures), baselined **RED**. `payments/` is the
+**scaffold the burndown builds into** — the adapters to build, the keys needed, and the
+x402 testnet-wallet flag. See `payments/README.md`.
