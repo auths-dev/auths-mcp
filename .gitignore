@@ -1,0 +1,7 @@
+node_modules/
+.scratch/
+dist/
+*.log
+.DS_Store
+# the prebuilt-binary-per-platform vendor tree is fetched/staged, never committed
+packages/auths-mcp/vendor/

@@ -1,0 +1,9 @@
+{
+  "//": "A frozen transcript of a prior live agent run's tools/call sequence (PRD §7). The gate drives the gateway from this in replay mode — no model, no network — and asserts byte-stable verdicts. PLACEHOLDER: shape only; the real transcript is recorded from a live run during the build (the replay scenario). Editing it to drop a proof or forge a wider scope must still fail closed (the adversarial guard).",
+  "scenario": "scope",
+  "grant": { "scope": ["fs.read"], "budget": "$5.00", "ttl": "30m" },
+  "calls": [
+    { "tool": "read_file", "args": { "path": "README.md" }, "expect": "allowed" },
+    { "tool": "write_file", "args": { "path": "README.md", "content": "x" }, "expect": "outside-agent-scope" }
+  ]
+}

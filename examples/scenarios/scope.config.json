@@ -1,0 +1,12 @@
+{
+  "//": "The intern (scope). Grant {fs.read}; the model tries fs.write → OutsideAgentScope. ~20 lines of config over the one gateway — a new scenario is a config, not a new demo (PRD §7, G5). PLACEHOLDER shape; the real config keys are pinned during the burndown.",
+  "scenario": "scope",
+  "grant": { "scope": ["fs.read"], "budget": "$5.00", "ttl": "30m" },
+  "downstream": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    }
+  },
+  "expect_refusal": { "tool": "write_file", "verdict": "outside-agent-scope" }
+}

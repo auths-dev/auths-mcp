@@ -1,0 +1,13 @@
+{
+  "//": "The agent-that-wouldnt-die (revocation). Revoke mid-run; the next call → Revoked, with no propagation window — liveness re-derived from the chain on every call (PRD §7, G5). PLACEHOLDER shape.",
+  "scenario": "killswitch",
+  "grant": { "scope": ["fs.read", "github.comment"], "budget": "$5.00", "ttl": "30m" },
+  "downstream": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"]
+    }
+  },
+  "revoke_after_calls": 2,
+  "expect_refusal": { "tool": "create_comment", "verdict": "revoked" }
+}
