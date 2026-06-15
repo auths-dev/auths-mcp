@@ -22,20 +22,36 @@ refused **before** the rail is touched, so the provider is never charged past th
 provider's own reference (`ch_…`, `0x…` tx) so the metered cost is re-derivable from the
 recorded response.
 
-## Hermetic vs. live
+## Real by default — test mode is the opt-in
 
-Each adapter runs **hermetic** (no credential → a recorded response shape, self-checkable
-with `node test.mjs`) or **live** (the credential present → the real provider). The
-automated suite is hermetic; the credential/wallet is only for the live charge.
+A wrapped payment rail resolves to one of two modes, and **REAL is the default**: with no
+flag the rails are **live Stripe** (`sk_live_…`) and **x402 on base mainnet** (real USDC).
+**`--test-mode`** (or `AUTHS_MCP_TEST_MODE=1` for the adapter) is the single, deliberate
+opt-in that flips the same rails to sandbox (Stripe `sk_test_…`, x402 `base-sepolia`).
+
+Two properties make real-by-default sane, enforced at the `wrap` boundary:
+
+- **The cap is mandatory.** A payment rail **cannot** be wrapped without a `--budget` — the
+  gateway refuses `budget-required`, fail-closed, in **both** modes. The cross-rail cap is
+  the seatbelt; it is not optional.
+- **The mode is disclosed.** Every payment-rail wrap prints `mode=real|test` plus a banner
+  at startup. `auths-mcp wrap --show-mode …` resolves and discloses the mode (and the rails
+  it names) **without** serving the proxy or touching a rail.
 
 ## Rails
 
-| Rail | Network | What the live leg needs | Page |
-| --- | --- | --- | --- |
-| **Stripe** | test-mode | a `sk_test_…` **key** (drop-in) | **[Stripe →](stripe.md)** |
-| **x402 / USDC** | base-sepolia testnet | a **funded testnet wallet *and* a facilitator URL** — more than a key | **[x402 / USDC →](x402.md)** |
+| Rail | Real (default) | Test (`--test-mode`) | What the live leg needs | Page |
+| --- | --- | --- | --- | --- |
+| **Stripe** | live `sk_live_…` @ `api.stripe.com` | `sk_test_…` | a **key** (drop-in) | **[Stripe →](stripe.md)** |
+| **x402 / USDC** | base **mainnet**, real USDC | base-sepolia | a **funded wallet *and* a facilitator URL** — more than a key | **[x402 / USDC →](x402.md)** |
+
+!!! danger "Real money is the default"
+    With no `--test-mode`, both rails spend **real money** (a live `sk_live_…` charge, a
+    real on-chain USDC transfer). The `--budget` cap is the hard ceiling — an agent provably
+    cannot cross it. Start tiny and prove the cap in `--test-mode` first. Live charges and
+    on-chain transfers are **irreversible**.
 
 !!! warning "x402 is not a key drop-in"
-    Unlike Stripe (where a test key alone makes the live charge), x402's live on-chain
-    settle needs a **funded base-sepolia USDC wallet** and an **x402 facilitator URL**. See
-    its page.
+    Unlike Stripe (where a key alone makes the charge), x402's on-chain settle needs a
+    **funded USDC wallet** and an **x402 facilitator URL** — on **base mainnet** for real,
+    `base-sepolia` under `--test-mode`. See its page.
