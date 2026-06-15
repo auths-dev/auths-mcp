@@ -1,0 +1,17 @@
+{
+  "name": "@auths/stripe-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Near-pluggable Stripe TEST-MODE charge MCP server — wraps Stripe's Charge API and returns the Charge object the auths-mcp gateway extracts the metered cost (amount_captured) from (AGENT-PAY-1, PRD §11 bound-don't-build).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "auths-stripe-adapter": "server.mjs"
+  },
+  "scripts": {
+    "test": "node test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
