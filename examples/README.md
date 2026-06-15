@@ -5,11 +5,14 @@ configs (PRD §7).
 
 ## Two modes, one gateway
 
-- **Live mode** — `../run.sh`. A real MCP-speaking model runs a short task against
-  tools behind the gateway; the audience watches the model *itself* emit an
-  out-of-bounds `tools/call` and the gateway refuse it with a named verdict, then
-  watch an in-bounds call succeed with a real downstream result + a receipt.
-  *(Not built yet — requires a model endpoint.)*
+- **Live mode** — `live/record.py` (the believability leg, PRD §7 / D7). A real
+  Anthropic (Claude) API tool-loop runs a short code-triage task against tools
+  behind the gateway; the model *itself* emits an out-of-bounds `tools/call`,
+  which `record.py` captures into the same transcript schema the gate replays.
+  This leg is **evidence-only, never gated** — with a real `ANTHROPIC_API_KEY`
+  it records a run; with no key it **defers** (records nothing, never fakes a
+  run) and the committed frozen transcript stands in for the gate. See
+  `live/README.md`.
 - **Replay mode** — `../run.sh --check`. Drives the gateway from the **frozen
   transcript** in `replay/transcript.json` — no network, no model, deterministic
   verdicts. This is the hermetic gate `matrix --gate` runs. Editing the transcript
