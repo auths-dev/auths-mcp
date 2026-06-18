@@ -212,3 +212,20 @@ rb_out="$(LAB_DIR="$rblab" AUTHS_HOME="$rblab/registry" AUTHS_REPO="$rblab/regis
 printf '%s' "$rb_out" | grep -q "audit: tampered-proof" \
   || { printf '%s\n' "$rb_out" | sed 's/^/    /'; fail "metered rebind red-team RED — a settlement bound to the wrong call was NOT caught by the offline audit"; }
 ok "metered rebind red-team GREEN — a settlement bound to the wrong call was caught (tampered-proof)"
+
+# ── Live-wire checks: drive the REAL gateway binary as a live stdio MCP server (not replay) ──
+# These exercise the call_tool path the replay gate cannot reach — per-call signing, gating,
+# metering, and the cross-rail cap on the wire — each in its own sandbox, asserting its own GREEN.
+# The cap check proves a metered call with no declared amount is refused, so an omitted amount
+# cannot let the rail charge while the durable cap stays unmoved.
+if [ -x "$GATEWAY_BIN" ]; then
+  for chk in live-wire-check live-wire-x402-check live-wire-cap-check; do
+    say "live-wire: ${chk}…"
+    lw_out="$(node "$HERE/examples/live/$chk.mjs" 2>&1)" \
+      || { printf '%s\n' "$lw_out" | sed 's/^/    /'; fail "live-wire RED — $chk did not pass"; }
+    printf '%s\n' "$lw_out" | tail -1 | sed 's/^/  /'
+  done
+  ok "live-wire checks GREEN — sign + gate + meter + cap enforced on the real wire"
+else
+  say "live-wire checks SKIPPED — gateway binary not built at $GATEWAY_BIN"
+fi
