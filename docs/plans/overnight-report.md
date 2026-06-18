@@ -15,12 +15,12 @@ self-review on trivial doc/shell changes (noted per row).
 | M1.4 cleanups | ✅ done | high | no |
 | M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
 | M2 the moat | 🅿️ **PARKED — needs your decision** | — | **YES — read Iteration 3 finding** |
-| M3 cross-rail (hermetic) | ⏳ queued | — | — |
+| M3 cross-rail (hermetic) | 🅿️ PARKED — gateway restructuring | — | no |
 | M3.2 x402 EIP-3009 + real settle | 🅿️ **PARKED — supervised** | — | **YES — ⚠️ key-leak finding** |
 | M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
 | M6 hardening | 🟡 partial — concurrency ✅ | high | no |
-| M5 console scaffold | ⏳ queued | — | — |
-| M8 demos | ⏳ queued | — | — |
+| M5 console scaffold | ⏸️ not started — net-new frontend | — | no |
+| M8 demos | ⏸️ not started — needs M3/M4 gateway features | — | no |
 
 ## Iteration log
 
@@ -185,3 +185,39 @@ M2/M3/M4-e2e/M6 together — best done with you in the loop (it's the security b
 
 This is why the night's clean, self-contained wins (M1.4, M1, M6-concurrency) are committed and
 the rest are parked with precise scopes rather than forced.
+
+---
+
+## 🛑 STOP — the loop ran out of *cleanly-autonomous* work (not out of milestones)
+
+Per the rule "STOP on no-safe-work-left": after M1.4 / M1 / M6-concurrency, **everything left is
+gateway-restructuring, a crypto/payment decision, or net-new frontend** — none safe to do
+unattended without forcing or faking. I stopped rather than manufacture motion. Nothing was
+pushed; all commits are on `dev-agentMoney` in both repos.
+
+### What you have, by commit
+| Commit | Repo | What |
+|---|---|---|
+| `5304f2c` | auths-mcp | M1.4 — de-staled README + exact-token run.sh assertion |
+| `7a69ed0` | auths-mcp | M1 — live opus transcript recorded + replays through the gateway |
+| `200753bb` | auths | M6 — cross-rail concurrency property test (adversarial-review SOUND, mutation-proven) |
+| `0a0bb57`,`027d423`,`bb0f501`,`6905575`,`c579582`,`5304f2c` | auths-mcp | the plans + this running report |
+
+### Needs your eyes (ranked)
+1. **⚠️ M3.2 key-leak (security):** `settle.mjs` transmits `X402_WALLET_PRIVATE_KEY` to the
+   facilitator. Low blast radius (throwaway base-sepolia burner, not in the gate) but must not
+   ship. Fix = the EIP-3009 local-signing rewrite (scoped in Iteration 5).
+2. **M2 decision:** the offline moat needs (A) a gateway proof+receipt+rail-response log and
+   (B) a cost-anchoring call (crypto-semantics). Both flagged in Iteration 3.
+3. The **one gateway effort** (the meta-finding above) that unblocks M2/M3/M4-e2e/M6 together.
+
+### Recommended next session (supervised, in this order)
+1. **Gateway persistence + multi-downstream** in `proxy.rs` — one effort that turns M3 (multi-rail),
+   M4-e2e (nested sub-agents), and M2 (proof log) from "parked" to "buildable". This is the
+   security boundary → do it with review.
+2. **M3.2 EIP-3009 rewrite** + one real base-sepolia settle (kills the key-leak, gets the tx hash).
+3. **M2 `verify-spend`** once (A)+(B) are decided — ~1 focused build, fully scoped in Iteration 3.
+4. Then M8 flagship demos (now that the gateway features exist) and M5 console.
+
+**To resume the autonomous loop later:** re-run `/loop` with the same prompt — it reads this report
+and continues from here.
