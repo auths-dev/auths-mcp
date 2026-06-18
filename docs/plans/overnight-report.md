@@ -14,7 +14,7 @@ self-review on trivial doc/shell changes (noted per row).
 |---|---|---|---|
 | M1.4 cleanups | ✅ done | high | no |
 | M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
-| M2 the moat | 🟢 **moat DEMONSTRATED** — 2.0/2.2/2.3/2.4 done; **2.1/B1 parked (your call)** | high | **YES — pick B1 option A/B** |
+| M2 the moat | 🟢 **moat DEMONSTRATED + standalone-auditable** (`verify-spend`); **2.1/B1 parked** | high | **YES — pick B1 option A/B** |
 | M3 cross-rail (hermetic) | 🅿️ PARKED — gateway restructuring | — | no |
 | M3.2 x402 EIP-3009 + real settle | ✅ **done — key-leak FIXED + real settle** | high | reviewed (payment code) |
 | M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
@@ -322,3 +322,11 @@ not park it. New work, same discipline (build → gate → adversarial review �
     **2.1/B1** (agent-signed cost — your A/B grant-model call) and **live-wire signing** (so a LIVE,
     not just hermetic, run is auditable — a must-review `proxy.rs::call_tool` change). An offline
     `auths verify-spend` CLI (resolve KELs from an issuer KEL file) is the remaining packaging.
+- **`verify-spend` CLI DONE (commit `38da8983` auths + run.sh) — the moat is now a STANDALONE
+  TOOL.** `auths-mcp-gateway verify-spend --log --registry --agent --root` resolves the KELs from
+  the issuer registry on disk (same `PerCallGate::resolve` the gate uses), runs `audit_spend_log`,
+  exits non-zero on any non-`consistent` verdict — so a customer / CI / third party re-derives
+  spend + catches a forged proof **from disk alone**. `./run.sh --check` now also runs the CLI as a
+  separate process and asserts it agrees (`verify-spend: consistent`). Adversarial review **SOUND**
+  (fail-closed exit codes, genuinely offline, no secret leak, genuine gate). **M2's user-facing
+  surface is complete**; only B1 (your A/B call) + live-wire signing remain, both flagged.

@@ -136,3 +136,13 @@ tamper_out="$(LAB_DIR="$tlab" AUTHS_HOME="$tlab/registry" AUTHS_REPO="$tlab/regi
 printf '%s' "$tamper_out" | grep -q "audit: tampered-proof" \
   || { printf '%s\n' "$tamper_out" | sed 's/^/    /'; fail "audit red-team RED — a tampered proof was NOT caught by the offline audit"; }
 ok "audit red-team GREEN — the offline audit independently caught a tampered proof (tampered-proof)"
+
+# The offline `verify-spend` CLI: a SEPARATE process re-audits the same log + registry from disk —
+# the moat as a standalone tool an external party can run, not just an in-process self-check.
+audit_args="$(printf '%s' "$out" | sed -n 's/.*audit-cmd: //p' | head -1)"
+[ -n "$audit_args" ] || fail "verify-spend RED — the replay emitted no audit-cmd line to re-run"
+# shellcheck disable=SC2086
+vs_out="$("$GATEWAY_BIN" verify-spend $audit_args 2>&1 || true)"
+printf '%s' "$vs_out" | grep -q "verify-spend: consistent" \
+  || { printf '%s\n' "$vs_out" | sed 's/^/    /'; fail "verify-spend RED — the standalone CLI did not re-audit the log as consistent"; }
+ok "verify-spend CLI GREEN — a standalone process re-audited the gateway-written log offline as consistent"
