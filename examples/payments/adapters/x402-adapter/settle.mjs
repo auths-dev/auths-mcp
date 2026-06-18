@@ -24,6 +24,9 @@
 //     an on-chain settle. A mainnet network is refused outright (test-money only).
 
 import { readFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { privateKeyToAccount } from "viem/accounts";
+import { recoverTypedDataAddress } from "viem";
 
 /** USDC has 6 decimals; cents are its 2-decimal minor unit, so 1 cent = 1e4 atomic. */
 const USDC_ATOMIC_PER_CENT = 10_000;
@@ -93,19 +96,20 @@ async function liveTestnetSettle({ amountAtomic, network, env }) {
     network,
     maxAmountRequired: String(amountAtomic),
     asset: env.X402_USDC_ASSET ?? "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // base-sepolia USDC
-    payTo: env.X402_PAY_TO ?? "",
+    payTo: env.X402_PAY_TO, // required for a live settle; signExactEvmPayment rejects a non-address
     resource: env.X402_RESOURCE ?? "",
     description: "One metered x402 tool call",
     mimeType: "application/json",
     maxTimeoutSeconds: 60,
     extra: { name: "USDC", version: "2" },
   };
-  // Settle through the facilitator (x402 spec v1 §5.3 SettlementResponse). The facilitator
-  // broadcasts the signed USDC transfer from the FUNDED testnet wallet on base-sepolia.
+  // Sign the EIP-3009 authorization LOCALLY: the private key signs in-process and is NEVER
+  // placed in the request. We POST the SIGNED PaymentPayload — not the key (x402 spec v1 §5.2).
+  const paymentPayload = await signExactEvmPayment({ requirements, network, env });
   const res = await fetch(`${env.X402_FACILITATOR_URL.replace(/\/$/, "")}/settle`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ requirements, walletKey: env.X402_WALLET_PRIVATE_KEY }),
+    body: JSON.stringify({ x402Version: 1, paymentPayload, paymentRequirements: requirements }),
   });
   const settlement = await res.json();
   if (!res.ok || settlement?.success !== true) {
@@ -117,6 +121,97 @@ async function liveTestnetSettle({ amountAtomic, network, env }) {
     throw new Error(`x402 facilitator settled on ${settlement.network}, expected ${network}`);
   }
   return { rail: "x402", requirements, settlement };
+}
+
+/** Sign an x402 "exact"-scheme EVM PaymentPayload for `requirements` with the funded burner
+ *  key — entirely LOCALLY. The private key is used ONLY to produce the EIP-3009
+ *  `transferWithAuthorization` signature in-process; it is NEVER returned, logged, or placed
+ *  in any network request. The returned payload carries the SIGNATURE, not the key, and is
+ *  self-checked offline (the signature must recover the burner address) before it is sent.
+ *
+ *  This is the §12 non-negotiable made literal: a facilitator that wants your raw key is
+ *  wrong — only the signed authorization crosses the wire. */
+export async function signExactEvmPayment({ requirements, network = "base-sepolia", env = process.env }) {
+  const key = env.X402_WALLET_PRIVATE_KEY;
+  if (typeof key !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(key)) {
+    throw new Error("X402_WALLET_PRIVATE_KEY is missing or not a 0x-prefixed 32-byte hex key");
+  }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(requirements.payTo))) {
+    throw new Error(`x402 payTo ${requirements.payTo} is not a 0x address — set X402_PAY_TO`);
+  }
+  const account = privateKeyToAccount(key); // key stays in-process; only `account` escapes
+
+  // EIP-3009 TransferWithAuthorization. The EIP-712 domain comes from the rail's OWN
+  // requirements.extra (name/version) — the adapter never hard-codes the token's domain.
+  const domain = {
+    name: requirements.extra?.name ?? "USDC",
+    version: requirements.extra?.version ?? "2",
+    chainId: chainIdFor(network),
+    verifyingContract: requirements.asset,
+  };
+  const types = {
+    TransferWithAuthorization: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "validAfter", type: "uint256" },
+      { name: "validBefore", type: "uint256" },
+      { name: "nonce", type: "bytes32" },
+    ],
+  };
+  const nowSec = Math.floor(Date.now() / 1000);
+  const authorization = {
+    from: account.address,
+    to: requirements.payTo,
+    value: BigInt(requirements.maxAmountRequired),
+    validAfter: 0n,
+    validBefore: BigInt(nowSec + (Number(requirements.maxTimeoutSeconds) || 60)),
+    nonce: `0x${randomBytes(32).toString("hex")}`,
+  };
+
+  const signature = await account.signTypedData({
+    domain,
+    types,
+    primaryType: "TransferWithAuthorization",
+    message: authorization,
+  });
+
+  // OFFLINE self-check (no network): the signature MUST recover the burner. This proves the
+  // signing is correct AND that we actually hold the key — independent of the facilitator.
+  const recovered = await recoverTypedDataAddress({
+    domain,
+    types,
+    primaryType: "TransferWithAuthorization",
+    message: authorization,
+    signature,
+  });
+  if (recovered.toLowerCase() !== account.address.toLowerCase()) {
+    throw new Error("EIP-3009 local signature self-check failed — refusing to settle");
+  }
+
+  // The x402 "exact" EVM PaymentPayload — JSON-safe strings; carries the SIGNATURE, never the key.
+  return {
+    x402Version: 1,
+    scheme: "exact",
+    network,
+    payload: {
+      signature,
+      authorization: {
+        from: authorization.from,
+        to: authorization.to,
+        value: String(authorization.value),
+        validAfter: String(authorization.validAfter),
+        validBefore: String(authorization.validBefore),
+        nonce: authorization.nonce,
+      },
+    },
+  };
+}
+
+/** The chainId for a SUPPORTED testnet (testnet-only — a mainnet network is refused upstream). */
+function chainIdFor(network) {
+  if (network === "base-sepolia") return 84532;
+  throw new Error(`x402-adapter has no chainId for non-testnet network ${network}`);
 }
 
 /** HERMETIC: return the recorded base-sepolia TESTNET settlement fixture's shape (no
