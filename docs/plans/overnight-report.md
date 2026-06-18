@@ -449,3 +449,69 @@ red-teams → `tampered-proof`) and re-runnable offline by anyone via `verify-sp
 2. Then M8 flagship demos (the moat is now real end-to-end) and M5 console.
 
 **To resume the loop:** re-run `/loop` with the same prompt — it reads this report and continues.
+
+---
+
+## ▶️ Production hardening (2026-06-18) — live-wire path
+
+After live-wire signing + metered x402 + a real base-sepolia settle landed, three hardening items
+were taken on. Each was gated (clippy + tests + `./run.sh --check` + both live-wire checks green),
+adversarially reviewed, and committed.
+
+### 1 — Signed back-link for audit completeness ✅ (auths `030e39b9`)
+Each call commit carries a signed `Auths-Prev` trailer = the hash of the prior spend-log record's
+commit (a genesis sentinel for the first), threaded through both signing paths (the gateway seeds it
+from the existing log and advances it per call). The offline audit verifies the chain is continuous
+and returns `dropped-call` on a gap, so a DROPPED or reordered record is now caught — where before
+only an EDITED record was caught (via its broken signature). Proven by a run.sh red-team (drop a
+record → `dropped-call`); a **mutation test** confirmed the red-team goes RED when the continuity
+check is disabled, so the guarantee is not a tautology. Documented residuals (not over-claimed):
+tail-truncation is not yet caught (needs a signed HEAD/count anchor, or for metered spend a
+durable-counter cross-check); concurrent multi-agent persists could fork the per-session chain head
+(needs sign+append serialized).
+
+### Architectural review ✅ (`auths/docs/plans/architectural_review_2026-06-18.md`)
+Coherence/bloat review of the gateway range (offline spend-audit → live-wire → metered → back-link):
+verdict **the range held up — more coherent, not less** (+1368/−387, deletion ratio 0.28, no new
+deps, every shared primitive single-sourced). Two edge fixes applied (auths `c1bb7722`): sealed a
+USDC-decimal leak (the `10_000` atomic-per-cent divisor was duplicated in the proxy; now one source
+in `rail.rs`) and corrected a stale trust-model doc that still claimed the live wire didn't sign.
+Section references were also swept out of all code comments (auths `affba771`).
+
+### 2 — Explicit custody for a long-lived MCP downstream ✅ (auths `c5dd5dea`, auths-mcp `8189de8`)
+A custody-armed wrap ran a one-shot preflight that executed the downstream to completion and
+returned — so a long-lived MCP **server** downstream never reached the live wire. Now a custody-armed
+wrap serves the live wire with the credential injected into the served child (the injection already
+existed at the downstream spawn), and the dead preflight is removed. Proven by a real base-sepolia
+x402 settle with the wallet key custodied via `--custody-credential` (on-chain tx
+`0x50130df24ca1c2c377327005d4ab57f89b534edf673b0e749008f9e9be8d8fcb`, confirmed on base-sepolia; the
+agent-signed settlement re-verified offline as consistent). The agent never held the key.
+
+### 3 — Pre-provisioned delegation 🅿️ PARKED (executable design note)
+**Why parked:** the gateway mints a FRESH org root → agent delegation per startup (`Chain::build`),
+so the audited subject is a self-minted identity, not the operator's real agent. Making the gateway
+resolve an operator-provisioned delegation is a genuine architectural change (a new resolve path +
+provisioning flow + keychain-alias resolution + new CLI surface + a provision-then-resolve test),
+not a clean local fix — parked for a supervised session rather than forced unattended.
+
+- **Operator provisions once, out of band** (reusing the existing `auths` CLI — no new binary):
+  `auths id create` (org root) → `auths id agent add --label <alias> --key root --scope <caps>` (the
+  delegated agent; its signing key lands in the gateway's keychain) against a PERSISTENT registry
+  dir. Yields a durable registry + a real agent `did:keri:` + the agent key under `<alias>`.
+- **Gateway resolves instead of mints:** add `Chain::resolve(registry_path, agent_did, agent_alias)`
+  that loads the existing chain — read `root_did` from the registry (`id show`), take `agent_did`
+  from `--agent-delegation`, materialize the agent delegate-machine from the existing registry (the
+  same tree surgery `materialize_agent_machine` does today), set `agent_alias` to the provisioned
+  key. `sign_call` is unchanged (it already signs by alias).
+- **Wiring:** `serve()` calls `Chain::resolve` when an operator registry path + `--agent-delegation`
+  are supplied; else it falls back to today's `Chain::build` (the demo/self-minted path). New
+  surface: a `--registry <path>` flag and an agent-key alias (`--agent-alias`, or the convention that
+  it matches the delegation label). The gateway's keychain env (`AUTHS_KEYCHAIN_*`) must point at the
+  keychain provisioned into.
+- **Test (the gate):** provision a registry in a sandbox, start the gateway with `--registry` +
+  `--agent-delegation`, drive a signed call, assert the spend log's audited subject is the REAL
+  provisioned `agent_did` (not a fresh one) and `verify-spend` is consistent; revoking the
+  provisioned delegation must make the next call audit `revoked`.
+- **Risk to watch:** the gateway must sign from exactly the keychain provisioned into, and the
+  materialized agent-machine must carry the agent dip without the org icp — verify the resolve path
+  produces a registry the native verifier accepts before trusting the audit.
