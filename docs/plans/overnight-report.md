@@ -14,7 +14,7 @@ self-review on trivial doc/shell changes (noted per row).
 |---|---|---|---|
 | M1.4 cleanups | ✅ done | high | no |
 | M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
-| M2 the moat | 🟡 **building** — 2.4 + 2.0 done; **2.1/B1 parked (your call)**; 2.2 next | med | **YES — pick B1 option A/B** |
+| M2 the moat | 🟡 **building** — 2.4+2.0+2.2 done; 2.3 next; **2.1/B1 parked (your call)** | med | **YES — pick B1 option A/B** |
 | M3 cross-rail (hermetic) | 🅿️ PARKED — gateway restructuring | — | no |
 | M3.2 x402 EIP-3009 + real settle | ✅ **done — key-leak FIXED + real settle** | high | reviewed (payment code) |
 | M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
@@ -296,3 +296,14 @@ not park it. New work, same discipline (build → gate → adversarial review �
   build it.** Meanwhile building 2.2 (`verify-spend`), which needs no decision and proves the moat's
   core (re-verify proofs offline → catch a tampered proof) — B1 then upgrades cost from
   rail-response-attested to agent-signed.
+- **Epic 2.2 DONE (commit `eb85d7b3`, auths) — the auditor core `audit_spend_log`.** Re-verifies
+  each spend-log record's signed `call_commit` through the **same** `verify_commit_against_kel_scoped`
+  the gate uses (reusing the gate's `CommitVerdict→Verdict` mapping) → `TamperedProof`/`Revoked`; sums
+  the rail-attested cost and cross-checks the operator's cumulative → typed `AuditVerdict`. **The
+  adversarial review earned its keep:** it caught a real bug — the cost sum was gated on the
+  operator-controlled `receipt.verdict` — now gated on the **re-derived** (proof-determined) verdict,
+  so a settled call can't be relabeled refused without breaking its signature; `replay.rs` records
+  `rail_response` only for forwarded calls; docs de-overclaimed (proof-authenticity is operator-proof,
+  cost is rail-attested until B1). Gate: core 39 + gateway 10 + clippy + `--check` GREEN. **Next:
+  2.3** wires the end-to-end proof (tampered replay → read the real log → `audit_spend_log` →
+  `TamperedProof`), converting 2.0+2.2 from primitives into a demonstrated moat.
