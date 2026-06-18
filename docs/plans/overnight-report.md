@@ -14,7 +14,7 @@ self-review on trivial doc/shell changes (noted per row).
 |---|---|---|---|
 | M1.4 cleanups | ✅ done | high | no |
 | M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
-| M2 the moat | ✅ **decided: A + B1** — ready to build | — | yes — the B1 signing diff (when built) |
+| M2 the moat | 🟡 **building** — 2.4 model done; hermetic-path next | med | yes — B1 + live-wire signing |
 | M3 cross-rail (hermetic) | 🅿️ PARKED — gateway restructuring | — | no |
 | M3.2 x402 EIP-3009 + real settle | ✅ **done — key-leak FIXED + real settle** | high | reviewed (payment code) |
 | M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
@@ -255,4 +255,18 @@ not park it. New work, same discipline (build → gate → adversarial review �
   facilitator's reported settled value; it does not re-check the on-chain amount against
   `maxAmountRequired`. Separate hardening, flagged.
 
-### M2 — decision recorded: **A + B1** (see `milestone_2_moat.md` epics 2.0–2.4). Next to build.
+### M2 — decision recorded: **A + B1** (see `milestone_2_moat.md` epics 2.0–2.4). Building.
+
+- **Epic 2.4 DONE (commit `87599c0b`, auths):** the audit data model — `AuditVerdict` (typed:
+  Consistent / TamperedProof / CostMismatch / BudgetMismatch / DroppedCall / Revoked) +
+  `SpendLogRecord` (the JSONL contract: signed `call_commit` + `receipt` + `rail_response` + the
+  B1 `settlement_commit`) — in `auths-mcp-core/src/audit.rs`. 37 tests green, clippy clean. Pure
+  data → self-reviewed. **Placement corrected** to `auths-mcp-core` (it wraps `Receipt`; the dep
+  runs core→verifier, so it can't live in the verifier).
+- **⚠️ Architectural finding (re-shapes 2.0/2.1, needs your awareness):** the **LIVE**
+  `proxy.rs::call_tool` path does **not** sign a per-call proof or build a `Receipt` — it does a
+  boolean scope check + budget and prints "receipted". Signed proofs exist only in the **hermetic
+  gate** (`replay.rs`). So I'm building the audit over the hermetic gate first (2.0 persist →
+  2.1 B1 settlement commit → 2.2 `verify-spend` → 2.3 red-team); **wiring signing into the LIVE
+  wire so a live run is auditable is a separate MUST-REVIEW follow-on** (it changes the live
+  wire's per-call crypto). Flagged, not done blind.

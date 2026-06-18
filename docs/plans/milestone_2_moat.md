@@ -11,6 +11,20 @@
 >
 > Authorization (who-was-allowed-what) is already fully offline-verifiable from a proof's bytes + KEL today; A+B1 add the same property for **spend**, and make a **past run** re-verifiable.
 
+> 🛠️ **BUILD PROGRESS (2026-06-18).**
+> - **Epic 2.4 DONE** — the audit data model (`AuditVerdict` typed enum + `SpendLogRecord` JSONL
+>   record) shipped in **`auths-mcp-core/src/audit.rs`** (37 tests green, clippy clean).
+>   *Placement corrected:* it lives in `auths-mcp-core`, **not** `auths-verifier` — `SpendLogRecord`
+>   wraps `Receipt`, and the crate dependency runs `auths-mcp-core → auths-verifier`, so the verdict
+>   type cannot live in the verifier without a dependency inversion.
+> - **⚠️ New finding that re-shapes 2.0/2.1:** the **LIVE** `proxy.rs::call_tool` path does **not**
+>   sign a per-call proof or build a `Receipt` — it does a boolean scope check (`self.scope.contains`)
+>   + budget enforcement and `eprintln!`s "receipted". The signed proof chain exists only in the
+>   **hermetic/replay gate** (`replay.rs`). So 2.0 is **not** pure persistence on the live wire.
+>   **Plan:** build the audit over the hermetic gate first (it already signs + verifies a real commit
+>   per call); **wiring `chain.rs` signing into the live `call_tool`** so a LIVE run is auditable is a
+>   **separate MUST-REVIEW follow-on** (it changes the live wire's per-call crypto behavior).
+
 ## Why
 A cap + a receipt is a weekend for any platform. The thing they structurally won't ship is a system whose whole point is that you **don't have to trust them**. If that isn't adversarially gated, there's no product — just a nicer proxy.
 
@@ -27,7 +41,7 @@ A cap + a receipt is a weekend for any platform. The thing they structurally won
 | 2.1 (B1) Signed settlement commit | `auths` | `crates/auths-mcp-gateway/src/chain.rs` + the gate settle path |
 | 2.2 Offline `verify-spend` verb | `auths` | `crates/auths-cli` (new `verify-spend`), `crates/auths-verifier` |
 | 2.3 Hostile-operator red-team harness | `auths-mcp` | `examples/adversarial/` (new) |
-| 2.4 Audit verdict type | `auths` | `crates/auths-verifier` |
+| 2.4 Audit verdict type ✅ | `auths` | `crates/auths-mcp-core/src/audit.rs` (corrected from auths-verifier) |
 
 ## Epics & subtasks
 
