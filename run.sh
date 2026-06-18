@@ -116,3 +116,23 @@ for verdict in $expects; do
 done
 
 ok "install-and-wrap smoke GREEN — every verdict the frozen transcript exercises ($(echo $expects | tr '\n' ' ')) was reproduced byte-stably"
+
+# ── M2 "the moat" — offline self-audit of the spend log the run just wrote ──────────────────
+# The clean run's gateway-written spend log must re-verify OFFLINE as `consistent`: every signed
+# proof re-verifies through the same verifier the gate uses, and the re-derived spend matches.
+printf '%s' "$out" | grep -q "audit: consistent" \
+  || { printf '%s\n' "$out" | sed 's/^/    /'; fail "self-audit RED — the clean run's spend log did not re-verify as \`consistent\`"; }
+ok "self-audit GREEN — the clean run's spend log re-verified offline as consistent"
+
+# Red-team: a TAMPERED signed proof in the log is CAUGHT by the offline audit. A fresh sandbox so
+# the tampered run cannot collide with the clean one. The replay itself exits non-zero (the live
+# gate ALSO refuses the forged calls) — expected; we assert the OFFLINE audit independently catches
+# it, i.e. a hostile operator cannot hand you a doctored log that audits clean.
+say "audit red-team: tampering every signed proof, then re-auditing the persisted log…"
+tlab="$SCRATCH/lab-tamper"
+tamper_out="$(LAB_DIR="$tlab" AUTHS_HOME="$tlab/registry" AUTHS_REPO="$tlab/registry" \
+  AUTHS_KEYCHAIN_FILE="$tlab/keys.enc" AUTHS_MCP_REPLAY_TAMPER=1 \
+  node "$LAUNCHER" replay --transcript "$TRANSCRIPT" 2>&1 || true)"
+printf '%s' "$tamper_out" | grep -q "audit: tampered-proof" \
+  || { printf '%s\n' "$tamper_out" | sed 's/^/    /'; fail "audit red-team RED — a tampered proof was NOT caught by the offline audit"; }
+ok "audit red-team GREEN — the offline audit independently caught a tampered proof (tampered-proof)"
