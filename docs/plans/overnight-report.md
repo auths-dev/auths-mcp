@@ -16,7 +16,7 @@ self-review on trivial doc/shell changes (noted per row).
 | M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
 | M2 the moat | ✅ **decided: A + B1** — ready to build | — | yes — the B1 signing diff (when built) |
 | M3 cross-rail (hermetic) | 🅿️ PARKED — gateway restructuring | — | no |
-| M3.2 x402 EIP-3009 + real settle | 🅿️ **PARKED — supervised** | — | **YES — ⚠️ key-leak finding** |
+| M3.2 x402 EIP-3009 + real settle | ✅ **done — key-leak FIXED + real settle** | high | reviewed (payment code) |
 | M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
 | M6 hardening | 🟡 partial — concurrency ✅ | high | no |
 | M5 console scaffold | ⏸️ not started — net-new frontend | — | no |
@@ -226,3 +226,33 @@ pushed; all commits are on `dev-agentMoney` in both repos.
 
 **To resume the autonomous loop later:** re-run `/loop` with the same prompt — it reads this report
 and continues from here.
+
+---
+
+## ▶️ Resumed — supervised session (2026-06-18)
+
+You woke the loop back up with decisions made (M2 = A + B1) and a directive to actually *fix* M3.2,
+not park it. New work, same discipline (build → gate → adversarial review → commit):
+
+### M3.2 — ✅ key-leak FIXED + real settle landed (commit `a3ec01c`, auths-mcp)
+- **The fix:** `x402-adapter/settle.mjs` no longer POSTs `{ requirements, walletKey }`. New
+  `signExactEvmPayment()` signs an EIP-3009 `TransferWithAuthorization` **locally** with viem
+  (`privateKeyToAccount → signTypedData`; EIP-712 domain from `requirements.extra`), self-checks
+  offline that the signature recovers the burner, and POSTs only the signed `exact`-scheme
+  `PaymentPayload`. **The private key never leaves the process.**
+- **Gate:** `node test.mjs` 11/11 — incl. a leak-regression test on BOTH a reconstructed body AND
+  the **real** `fetch`-stubbed `liveTestnetSettle` path (re-adding `walletKey` makes it go red),
+  plus key/payTo input guards; existing hermetic checks intact.
+- **Adversarial review: SOUND** — key-leak verified closed by mutation; EIP-3009 payload matches the
+  coinbase/x402 v1 exact-EVM spec; offline self-check is real (a tampered sig fails to recover). Two
+  caveats it raised were fixed (test the real POST path; drop the misleading empty-`payTo` default).
+- **Real settles landed** on base-sepolia via the live `x402.org/facilitator`, key never transmitted:
+  - `0xa5b0f9266c4444369b4471067b54a0ec18f03f89315f4100618aefe8d21090e8`
+  - `0xe4377915791cb3d46e136defa12e9c007f7e9106069584ebf2c89b16be6b1e52`
+  - (the committed `settle()` path itself completes the second one — the first attempt's HTTP-200
+    non-success was transient.)
+- **One out-of-scope note from review** (pre-existing, not introduced): the adapter trusts the
+  facilitator's reported settled value; it does not re-check the on-chain amount against
+  `maxAmountRequired`. Separate hardening, flagged.
+
+### M2 — decision recorded: **A + B1** (see `milestone_2_moat.md` epics 2.0–2.4). Next to build.
