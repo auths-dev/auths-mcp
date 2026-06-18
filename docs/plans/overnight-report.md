@@ -14,7 +14,7 @@ self-review on trivial doc/shell changes (noted per row).
 |---|---|---|---|
 | M1.4 cleanups | ✅ done | high | no |
 | M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
-| M2 the moat | 🅿️ **PARKED — needs your decision** | — | **YES — read Iteration 3 finding** |
+| M2 the moat | ✅ **decided: A + B1** — ready to build | — | yes — the B1 signing diff (when built) |
 | M3 cross-rail (hermetic) | 🅿️ PARKED — gateway restructuring | — | no |
 | M3.2 x402 EIP-3009 + real settle | 🅿️ **PARKED — supervised** | — | **YES — ⚠️ key-leak finding** |
 | M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
@@ -60,6 +60,11 @@ self-review on trivial doc/shell changes (noted per row).
   fixture intact). Did NOT overwrite the committed fixture.
 
 ### Iteration 3 — M2 the moat → deep recon → 🅿️ PARKED (needs your decision)
+
+> ✅ **RESOLVED 2026-06-18 — decision made: A + B1.** Persist the proof+receipt+rail-response log
+> (A) **and** anchor the settled cost in a signed *settlement commit* (B1, not the weaker
+> rail-attested B2). Full design is in `milestone_2_moat.md` (epics 2.0–2.4). The finding below is
+> kept as the record of *why*.
 
 I went deepest here as asked, and the deep read of the real data model says the moat **cannot
 be built honestly as specced yet** — it presupposes persisted data the gateway doesn't produce.

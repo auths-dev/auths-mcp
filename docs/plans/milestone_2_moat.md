@@ -2,9 +2,14 @@
 
 > **Goal.** Prove the property a proxy can never have: the party **running** the gateway cannot lift the budget, forge a receipt, or drop a call — and anyone can re-derive the true spend **without trusting the operator**.
 > **Strategy.** AGENT-2. "Bounded agent" is copyable; "bounded across a boundary you don't trust, verifiable without the operator" is the moat. **This is the gate — nothing past M2 ships until it's adversarially proven.**
-> **Status today.** The online gate verifies a signed git-commit proof per call (`auths-verifier::verify_commit_against_kel_scoped`). Missing: the **offline** audit verb + the red-team harness.
+> **Status today.** The online gate verifies a signed git-commit proof per call (`auths-verifier::verify_commit_against_kel_scoped`). Missing: **(A)** a persisted proof+receipt+rail-response log, **(B1)** a signed settlement commit that anchors the cost, and the **offline** `verify-spend` verb + red-team harness on top.
 >
-> ⚠️ **REALITY CHECK (overnight recon, parked — needs a decision; see `overnight-report.md` Iteration 3).** The original framing assumed a persisted "signed proof chain" + recorded costs that **do not exist today**: (1) the signed commit covers only `{tool,args}`+scope — **the settled cost is not signed**; (2) each proof commit is built in a **throwaway per-call git repo** and discarded (the receipt keeps only the SHA, not the bytes) — **no persistent chain to re-verify offline**; (3) receipts/rail-responses **aren't persisted** in the live path; (4) `auths audit` is already the commit-signing report — the spend audit needs a new name (`auths verify-spend`). So the moat needs, FIRST: **(A) the gateway persists a proof+receipt+rail-response log**, and **(B) a cost-anchoring decision** (sign the rail settlement vs accept rail-attested cost — a crypto-semantics call). The CLI `verify-spend` build is ~1 focused step *after* A+B. Authorization (who-was-allowed-what) is already fully offline-verifiable from a proof's bytes + KEL; the *spend* and *re-verifying a past run* are what A+B unblock.
+> ✅ **DECISION (2026-06-18) — build A + B1.** Overnight recon found the original framing assumed persisted, cost-anchored proofs that don't exist yet: each proof commit is a **throwaway per-call git repo** (only the SHA survives), the **settled cost is never signed** (`{tool,args}`+scope only), receipts/rail-responses **aren't persisted**, and `auths audit` is already the commit-signing report (so the spend audit is **`auths verify-spend`**). Chosen path:
+>
+> - **(A) Persist a proof+receipt+rail-response log** — *mandatory, not a choice*: without it there is nothing offline to audit. *(gateway change — `proxy.rs`)*
+> - **(B1) Anchor the settled cost in the agent's signature** — after a metered call settles, the gate signs a **second** commit (a *settlement commit*) binding `{call proof_ref, rail, actual_cents, rail_ref, cumulative}` with the **same delegated key** + an `Auths-Scope: settle` trailer. The audit re-derives true spend by **summing the signed costs** — un-forgeable by the operator, not merely re-derived from a response the operator recorded (that was B2, the weaker option — rejected). **This does NOT change `verify_commit_against_kel_scoped`'s cryptography** — the settlement commit is just another delegated-key-signed, scope-checked commit the *same* verifier already validates. The must-review surface is **one new signing event in the settle path**, not the verifier.
+>
+> Authorization (who-was-allowed-what) is already fully offline-verifiable from a proof's bytes + KEL today; A+B1 add the same property for **spend**, and make a **past run** re-verifiable.
 
 ## Why
 A cap + a receipt is a weekend for any platform. The thing they structurally won't ship is a system whose whole point is that you **don't have to trust them**. If that isn't adversarially gated, there's no product — just a nicer proxy.
@@ -18,51 +23,72 @@ A cap + a receipt is a weekend for any platform. The thing they structurally won
 ## Where the work lands
 | Epic | Repo | Path |
 |---|---|---|
-| 2.1 Independent audit verb | `auths` | `crates/auths-cli` (new `audit`), `crates/auths-verifier` |
-| 2.2 Hostile-operator harness | `auths-mcp` | `examples/adversarial/` (new) |
-| 2.3 Audit verdict type | `auths` | `crates/auths-verifier` |
+| 2.0 (A) Proof+receipt+rail-response log | `auths` | `crates/auths-mcp-gateway/src/proxy.rs` (+ new `spend_log.rs`) |
+| 2.1 (B1) Signed settlement commit | `auths` | `crates/auths-mcp-gateway/src/chain.rs` + the gate settle path |
+| 2.2 Offline `verify-spend` verb | `auths` | `crates/auths-cli` (new `verify-spend`), `crates/auths-verifier` |
+| 2.3 Hostile-operator red-team harness | `auths-mcp` | `examples/adversarial/` (new) |
+| 2.4 Audit verdict type | `auths` | `crates/auths-verifier` |
 
 ## Epics & subtasks
-### 2.1 — Independent audit verb · `auths`
-- New `auths audit --receipts <dir> --issuer-kel <kel>` (or `verify-receipts`): replay the signed proof chain through the **same** `verify_commit_against_kel_scoped`.
-- Re-extract each call's cost with `rail::extract` (ignore any claimed number); recompute the cumulative.
-- Check chain continuity (no dropped/reordered call) and revocation.
-- Emit a typed `AuditVerdict` + a human summary; `--json` for the console (M5).
 
-### 2.2 — Hostile-operator red-team harness · `auths-mcp`
-- New `examples/adversarial/` driving the gateway, then tampering the **operator-controlled** state three ways:
-  - (a) edit the `SettledCounter` file to *lift* the budget;
-  - (b) inject a forged receipt that *understates* spend;
-  - (c) *drop* a call from the receipt log.
-- Assert each is caught by `auths audit` / fails closed. Wire as a CI red-team gate.
+### 2.0 — (A) Persist the proof+receipt+rail-response log · `auths`
+- Today proof commits live in **throwaway per-call repos** and the live path only `eprintln!`s receipts. Add an **append-only log per delegation** — `<repo>/spend-log/<delegation>.jsonl`, one record per call: `{ call_commit_bytes, receipt, rail?, rail_response_bytes?, settlement_commit_bytes? }`.
+- Written in `proxy.rs` on the brokered path, after settle. This is the **only** artifact `verify-spend` reads — no auths server, no operator cooperation. Append-only + fsync; a crash leaves a whole-record-or-nothing tail.
 
-### 2.3 — Audit verdict type · `auths`
-- `AuditVerdict::{Consistent, TamperedProof{proof_ref}, BudgetMismatch{recomputed,claimed}, DroppedCall{at}, Revoked{at}}` in `auths-verifier`, surfaced by the CLI + console.
+### 2.1 — (B1) Anchor the settled cost in a signed settlement commit · `auths` *(must-review)*
+- After a **metered** call settles, the gate signs a SECOND commit — the *settlement commit* — with the **same delegated key** + `Auths-Scope: settle`, binding `{ call_proof_ref, rail, actual_cents (== `rail::extract` of the REAL response), rail_ref (charge_ref / tx), cumulative_after }`.
+- **Chain it** (parent = the call commit / prior settlement) so the sequence is ordered and a dropped pair is a detectable gap.
+- **No verifier change:** the settlement commit is validated by the SAME `verify_commit_against_kel_scoped` — it is a delegated-key-signed, scope-checked commit like any other. The new surface is exactly one signing event in the settle path (the agent's delegated key is already in-process there to sign the call commit), plus a `settle` capability in the scope seal. Flag for review; it does **not** touch the verifier's crypto.
 
-## Grounded sketch — recompute from the signed chain, not the operator's counter
+### 2.2 — Offline `verify-spend` verb · `auths`
+- New `auths verify-spend --log <spend-log.jsonl> --issuer-kel <kel>`: for each record verify **both** the call commit and the settlement commit through the **same** `verify_commit_against_kel_scoped`; re-derive cumulative by **summing the signed `actual_cents`**; cross-check each signed cost against `rail::extract(rail_response)`; check chain continuity + revocation.
+- Emit a typed `AuditVerdict` + human summary; `--json` for the console (M5). Name is `verify-spend` — `auths audit` is already the commit-signing compliance report.
+
+### 2.3 — Hostile-operator red-team harness · `auths-mcp`
+- New `examples/adversarial/` drives the gateway, then tampers the **operator-controlled** state and asserts each fails closed under `verify-spend`:
+  - (a) lift the `SettledCounter`; (b) forge a receipt understating spend; (c) drop a call;
+  - **(d) NEW under B1 — rewrite a settlement commit's `actual_cents`** → the agent's signature no longer verifies (`TamperedProof`); the operator cannot re-sign without the delegated key.
+- Wire as a CI red-team gate.
+
+### 2.4 — Audit verdict type · `auths`
+- `AuditVerdict::{ Consistent, TamperedProof{proof_ref}, CostMismatch{signed, recomputed, proof_ref}, BudgetMismatch{recomputed, claimed}, DroppedCall{at}, Revoked{at} }` in `auths-verifier`, surfaced by the CLI + console.
+
+## Grounded sketch — re-derive from the **signed** costs, not the operator's counter (B1)
 ```rust
 let mut settled = 0u64;
-for r in proof_chain {                                // ordered; gaps detectable
-    let v = auths_verifier::verify_commit_against_kel_scoped(  // SAME fn the live gate calls
-        &r.signed_commit, &agent_kel, &delegator_kel, &pinned_roots, provider, now).await;
-    audit.require(v.is_authentic(), TamperedProof { proof_ref: r.proof_ref.clone() })?;
-    settled += rail::extract(r.rail, &r.rail_response)?.amount_cents;   // re-extract; trust nothing
+for rec in spend_log {                                         // ordered; gaps detectable
+    // 1. the call was authorized — the SAME verifier the live gate calls
+    let v = verify_commit_against_kel_scoped(&rec.call_commit, &agent_kel, &delegator_kel, &roots, provider, now).await;
+    audit.require(v.is_valid(), TamperedProof { proof_ref: rec.call_ref() })?;
+
+    if let Some(settle_commit) = &rec.settlement_commit {       // metered calls carry one
+        // 2. the COST is signed by the agent (B1) — verify the settlement commit too
+        let s = verify_commit_against_kel_scoped(settle_commit, &agent_kel, &delegator_kel, &roots, provider, now).await;
+        audit.require(s.is_valid(), TamperedProof { proof_ref: rec.settle_ref() })?;
+        let signed = rec.signed_cost_cents();                  // the cost the AGENT committed to
+        // 3. signed cost must equal the recorded rail response — operator can't sign X but log Y
+        let recomputed = rail::extract(rec.rail, &rec.rail_response)?.amount_cents;
+        audit.require(signed == recomputed, CostMismatch { signed, recomputed, proof_ref: rec.settle_ref() })?;
+        settled += signed;                                     // sum SIGNED costs — never the operator's counter
+    }
 }
 audit.require(settled == claimed_cumulative, BudgetMismatch { recomputed: settled, claimed })?;
-audit.require(chain_is_gapless(&proof_chain), DroppedCall { at: /* first gap */ })?;
+audit.require(chain_is_gapless(&spend_log),  DroppedCall   { at: /* first gap */ })?;
 ```
 
 ## Rigor — don't be sloppy
 - **DRY — one verifier, two callers:** the offline audit calls the **exact** `verify_commit_against_kel_scoped` the online gate calls. A second verification path is the one place a bug is catastrophic.
 - **Type-driven:** `AuditVerdict` variants, never a bool. Every failure mode is a named case the caller must handle.
-- **Trust nothing the operator writes:** SETTLED is recomputed from the signed proof chain + rail responses; the `SettledCounter` and receipt log are **untrusted hints**.
+- **Trust nothing the operator writes:** SETTLED is re-derived by summing the agent's **signed** settlement costs (B1), each cross-checked against the recorded rail response; the `SettledCounter` and the raw receipt log are **untrusted hints**, never inputs to the total.
 - **Pure + portable = the moat:** `auths-verifier` is WASM-safe (F.5). The audit must run with **zero** auths server and **zero** operator cooperation — customer laptop, CI box, third party. Don't add a runtime dependency that breaks that.
 
 ## Done-when (acceptance)
-- [ ] `auths audit` reproduces the exact true cumulative spend from receipts + issuer KEL alone.
-- [ ] All three tamper beats (lift / forge / drop) fail closed, each as a distinct `AuditVerdict`.
-- [ ] The harness runs as a CI red-team gate.
-- [ ] The audit runs offline with no gateway/operator involvement.
+- [ ] **(A)** the gateway writes a persisted proof+receipt+rail-response log; a past run is re-readable offline.
+- [ ] **(B1)** every metered call carries a **signed settlement commit** that anchors its cost.
+- [ ] `auths verify-spend` reproduces the exact true cumulative spend by **summing the signed costs**, from the log + issuer KEL alone.
+- [ ] **Four** tamper beats — lift / forge / drop / **alter-signed-cost** — fail closed, each a distinct `AuditVerdict`.
+- [ ] Runs offline with zero gateway/operator involvement; the harness is a CI red-team gate.
 
 ## Dependencies
-- **Blocks:** M3–M8 (the gate). **Blocked by:** M1 (a live run produces the proof chain to audit).
+- **Blocks:** M3–M8 (the gate). **Blocked by:** M1 (a live run produces the log to audit).
+- **Sequencing inside M2:** 2.0 (A: log) → 2.1 (B1: signed cost) → 2.2 (`verify-spend`) + 2.4 (verdict type) → 2.3 (red-team gate).
