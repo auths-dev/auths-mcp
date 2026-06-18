@@ -97,19 +97,19 @@ if [ $rc -ne 0 ]; then
   fail "replay smoke RED — the gateway did not reproduce the transcript's verdicts (exit $rc)."
 fi
 
-# The gateway's own exit 0 already means every call's re-derived verdict matched its
-# transcript expectation. We re-assert that independently here: extract the set of
-# verdicts the FROZEN transcript actually exercises (its `expect` fields) and confirm
-# each appears in the gateway's verdict stream. Deriving the expectations from the
-# transcript — rather than hardcoding a list — keeps the smoke honest as the
-# committed scenario evolves (e.g. when the budget/revocation transcripts land it
-# will assert usage-cap-exceeded / revoked automatically, with no edit here).
+# The gateway's own exit 0 is the AUTHORITATIVE gate: in replay it re-derives each call's
+# verdict from the signed chain and exits non-zero on ANY divergence from the transcript's
+# `expect`. We re-assert independently here as a secondary smoke: extract the set of verdicts
+# the FROZEN transcript exercises (its `expect` fields) and confirm each is present in the
+# gateway's verdict stream — matched as an EXACT token (word-bounded, never a loose
+# substring), so e.g. `allowed` can't spuriously match inside another verdict. Deriving the
+# expectations from the transcript keeps the smoke honest as the committed scenario evolves.
 expects="$(grep -oE '"expect"[[:space:]]*:[[:space:]]*"[a-z-]+"' "$TRANSCRIPT" \
              | grep -oE '[a-z-]+"$' | tr -d '"' | sort -u)"
 [ -n "$expects" ] || fail "replay smoke RED — the transcript declares no \`expect\` verdicts to assert"
 
 for verdict in $expects; do
-  printf '%s' "$out" | grep -q "verdict.*$verdict" \
+  printf '%s' "$out" | grep -qE "(^|[^a-z-])$verdict([^a-z-]|\$)" \
     || fail "replay smoke RED — transcript expects verdict \"$verdict\" but it is absent from the gateway output"
 done
 

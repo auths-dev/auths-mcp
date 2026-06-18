@@ -37,15 +37,18 @@ incremental.
 
 ## Status
 
-**Scaffold.** The product isn't built yet:
+**Working — gateway built, `./run.sh --check` GREEN.** The bounded-agent gateway is
+real (`auths-mcp-{core,gateway,server}` in the `auths` monorepo):
 
-- `./run.sh --check` (the install-and-wrap smoke / the federated gate) is a **real
-  check that currently exits non-zero** — it resolves the launcher, the launcher
-  resolves a gateway binary, and the gateway is driven in replay mode over a frozen
-  transcript. Every step fails today because the gateway is a stub. It goes green
-  once the wrapper + gateway work. There is no fake `exit 0`.
-- The three scenario configs in `examples/scenarios/` and the recorded transcript
-  in `examples/replay/` are placeholders pinned during the burndown.
+- `./run.sh --check` (the install-and-wrap smoke / the federated gate) **passes**: it
+  resolves the launcher, the launcher resolves the prebuilt gateway binary, and the
+  gateway is driven in replay mode over a frozen transcript — re-deriving each call's
+  verdict from the signed chain and exiting non-zero on ANY divergence (no fake
+  `exit 0`). Today it runs via `GATEWAY_BIN` against the monorepo's `auths-mcp-gateway`;
+  bundling the npm-vendored per-platform binary is the remaining distribution step (M7).
+- The scenario configs in `examples/scenarios/` and the transcript in `examples/replay/`
+  drive that gate; the payment adapters in `examples/payments/` are built (hermetic path
+  green; the live x402 settle is pending the EIP-3009 rewrite — see `docs/plans/`).
 
 ## Layout
 
