@@ -117,7 +117,7 @@ done
 
 ok "install-and-wrap smoke GREEN — every verdict the frozen transcript exercises ($(echo $expects | tr '\n' ' ')) was reproduced byte-stably"
 
-# ── M2 "the moat" — offline self-audit of the spend log the run just wrote ──────────────────
+# ── Offline self-audit of the spend log the run just wrote ──────────────────────────────────
 # The clean run's gateway-written spend log must re-verify OFFLINE as `consistent`: every signed
 # proof re-verifies through the same verifier the gate uses, and the re-derived spend matches.
 printf '%s' "$out" | grep -q "audit: consistent" \
@@ -146,6 +146,22 @@ vs_out="$("$GATEWAY_BIN" verify-spend $audit_args 2>&1 || true)"
 printf '%s' "$vs_out" | grep -q "verify-spend: consistent" \
   || { printf '%s\n' "$vs_out" | sed 's/^/    /'; fail "verify-spend RED — the standalone CLI did not re-audit the log as consistent"; }
 ok "verify-spend CLI GREEN — a standalone process re-audited the gateway-written log offline as consistent"
+
+# Red-team: a DROPPED log record is caught. Each record's signed Auths-Prev links to the prior one,
+# so removing a record breaks the chain and the audit reports dropped-call — where before only an
+# EDITED record was caught (via its broken signature), a hostile operator could silently truncate.
+say "back-link red-team: dropping a record from the log, then re-auditing…"
+log_path="$(printf '%s' "$audit_args" | sed -n 's/.*--log \([^ ]*\).*/\1/p')"
+{ [ -n "$log_path" ] && [ -f "$log_path" ]; } || fail "back-link RED — could not resolve the spend-log path to tamper"
+dropped_log="$log_path.dropped"
+# Drop the FIRST record: the next record's Auths-Prev no longer links to the genesis sentinel.
+tail -n +2 "$log_path" > "$dropped_log"
+dropped_args="$(printf '%s' "$audit_args" | sed "s#--log $log_path#--log $dropped_log#")"
+# shellcheck disable=SC2086
+drop_out="$("$GATEWAY_BIN" verify-spend $dropped_args 2>&1 || true)"
+printf '%s' "$drop_out" | grep -q "dropped-call" \
+  || { printf '%s\n' "$drop_out" | sed 's/^/    /'; fail "back-link RED — a dropped log record was NOT caught (no dropped-call)"; }
+ok "back-link red-team GREEN — a dropped log record was caught (dropped-call)"
 
 # ── Metered settlement: a paid call signs its cost, and the offline audit reads the SIGNED amount ──
 # A metered Stripe test-mode charge ($3.00 extracted from the recorded response) settles in-budget;
