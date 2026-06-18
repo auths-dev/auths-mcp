@@ -14,7 +14,7 @@ self-review on trivial doc/shell changes (noted per row).
 |---|---|---|---|
 | M1.4 cleanups | ✅ done | high | no |
 | M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
-| M2 the moat | 🟡 **building** — 2.4 + 2.0 done; B1 (2.1) next | med | yes — B1 + live-wire signing |
+| M2 the moat | 🟡 **building** — 2.4 + 2.0 done; **2.1/B1 parked (your call)**; 2.2 next | med | **YES — pick B1 option A/B** |
 | M3 cross-rail (hermetic) | 🅿️ PARKED — gateway restructuring | — | no |
 | M3.2 x402 EIP-3009 + real settle | ✅ **done — key-leak FIXED + real settle** | high | reviewed (payment code) |
 | M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
@@ -281,3 +281,18 @@ not park it. New work, same discipline (build → gate → adversarial review �
   write→read→re-verify-catches-tamper proof is folded into **2.2 (`verify-spend`) + 2.3 (red-team)**.
   Acted on the one forward-looking fix: a live-wiring **header caveat** on `rail_response`
   (capture body only, never an `Authorization` header — for when the live path populates it).
+- **Epic 2.1 (B1) 🅿️ PARKED — needs your grant-model call.** `chain.sign_call` can sign arbitrary
+  canonical bytes under any capability, and the verifier checks `capability ⊆ anchored scope`. So a
+  settlement commit must claim a capability the agent HOLDS — which forces a choice:
+  - **Option A (recommended):** add a narrow **`settle`** capability to the agent's grant; the agent
+    attests its own spend under a dedicated bounded authority. Semantically honest; keeps the audit's
+    canonical types clean (`type:"settlement"` distinct from a tool call). Cost: the grant model +
+    verifier scope set gain `settle`.
+  - **Option B:** sign the settlement under the **call's own** capability (already held) — no grant
+    change, but conflates a settlement with a tool capability; the audit must distinguish by content.
+  Both achieve B1's property (the agent cryptographically signs the cost; the operator can't forge it
+  without the key) and are ~1 focused build once chosen. Parked because it's an
+  authorization-semantics decision (must-review), not a blind autonomous call. **Pick A or B and I'll
+  build it.** Meanwhile building 2.2 (`verify-spend`), which needs no decision and proves the moat's
+  core (re-verify proofs offline → catch a tampered proof) — B1 then upgrades cost from
+  rail-response-attested to agent-signed.
