@@ -17,7 +17,9 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 LAUNCHER="$HERE/packages/auths-mcp/bin/auths-mcp.mjs"
-TRANSCRIPT="$HERE/examples/replay/transcript.json"
+# Defaults to the committed gate fixture; override with TRANSCRIPT=… to replay a recorded
+# transcript (e.g. one captured by examples/live/record.py) through the same sandbox.
+TRANSCRIPT="${TRANSCRIPT:-$HERE/examples/replay/transcript.json}"
 
 # GATEWAY_BIN: the smoke points the launcher at a freshly built gateway the way the
 # release CI's vendored binary will later be found. Default to the auths monorepo's

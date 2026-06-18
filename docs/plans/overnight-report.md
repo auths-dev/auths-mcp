@@ -12,8 +12,8 @@ self-review on trivial doc/shell changes (noted per row).
 
 | Milestone | Status | Confidence | Needs your eyes |
 |---|---|---|---|
-| M1.4 cleanups | 🟡 in progress | — | no |
-| M1 live transcript | ⏳ queued | — | — |
+| M1.4 cleanups | ✅ done | high | no |
+| M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
 | M2 the moat | ⏳ queued | — | **yes (verifier)** |
 | M3 cross-rail (hermetic) | ⏳ queued | — | — |
 | M3.2 x402 EIP-3009 + real settle | ⏳ queued | — | **yes (payment code)** |
@@ -37,3 +37,24 @@ self-review on trivial doc/shell changes (noted per row).
   disproportionate for a redundant check). Documented that the Rust exit-code is the real gate.
 - Review: doc + shell only → self-reviewed (full adversarial subagent reserved for the code
   milestones). Gate: `./run.sh --check` re-run.
+
+### Iteration 2 — M1 live (real recording + replay round-trip)
+- System Python had a stale `anthropic` (0.18.1) that crashed on newer `httpx` (`proxies=`
+  TypeError) — **not a fake, an env mismatch**. Isolated a throwaway venv with current
+  `anthropic` (0.109.2); the key loaded from `auths/.env` via `set -a; . auths/.env; set +a`
+  (never echoed/committed).
+- **Recorded a REAL `claude-opus-4-8` tool-loop** (`examples/live/record.py`): the model read
+  the two files and posted a `create_comment` triage — 3 calls, all in-scope (`fs.read`,
+  `github.comment`). It even self-declined to over-reach, citing read+comment-only delegation.
+- Made `run.sh` honor a `TRANSCRIPT=…` override (1 line; default fixture unchanged). Verified:
+  the recorded transcript **replays GREEN through the gateway** (live→record→replay round-trip
+  proven), and the committed fixture still passes. Evidence: `examples/live/transcript.recorded.json`
+  (secret-scanned clean).
+- **¹ Note (honest):** this run had **no emergent over-reach**, so it only exercises the
+  `allowed` verdict. The live *refusal* (`outside-agent-scope`) is covered by the committed
+  fixture (`examples/replay/transcript.json`: read=allowed, write=refused) + the hermetic
+  `--check`, not by a live recording. Re-running `record.py` would eventually capture an
+  emergent `write_file` over-reach for a live-refusal transcript — left as optional (didn't
+  burn repeated API runs chasing emergent behavior).
+- Review: data + 1-line shell → self-reviewed (secret scan clean, both `--check` paths green,
+  fixture intact). Did NOT overwrite the committed fixture.
