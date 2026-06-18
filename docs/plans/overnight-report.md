@@ -14,7 +14,7 @@ self-review on trivial doc/shell changes (noted per row).
 |---|---|---|---|
 | M1.4 cleanups | ✅ done | high | no |
 | M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
-| M2 the moat | 🟡 **building** — 2.4 model done; hermetic-path next | med | yes — B1 + live-wire signing |
+| M2 the moat | 🟡 **building** — 2.4 + 2.0 done; B1 (2.1) next | med | yes — B1 + live-wire signing |
 | M3 cross-rail (hermetic) | 🅿️ PARKED — gateway restructuring | — | no |
 | M3.2 x402 EIP-3009 + real settle | ✅ **done — key-leak FIXED + real settle** | high | reviewed (payment code) |
 | M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
@@ -270,3 +270,14 @@ not park it. New work, same discipline (build → gate → adversarial review �
   2.1 B1 settlement commit → 2.2 `verify-spend` → 2.3 red-team); **wiring signing into the LIVE
   wire so a live run is auditable is a separate MUST-REVIEW follow-on** (it changes the live
   wire's per-call crypto). Flagged, not done blind.
+- **Epic 2.0 DONE (commit `fcd79bbd`, auths) — the spend-log WRITE PRIMITIVE.** The hermetic gate
+  now appends a `SpendLogRecord` per call to `<repo>/spend-log/<delegation>.jsonl` (signed
+  `call_commit` bytes + receipt + `rail_response`). Read side + path layout live in `auths-mcp-core`
+  (`spend_log_path`/`read_spend_log`, shared with the `auths-cli` auditor); gateway owns the append.
+  Gate: core 39 + gateway 10 + clippy + `./run.sh --check` GREEN. **Adversarial review: SOUND on the
+  write path** (persisted bytes are the real judged proof incl. tamper; append-only structurally
+  guaranteed; path-traversal-safe; fails closed; no secret in the hermetic fixture). Reviewer's fair
+  finding: *2.0 is the write primitive, not yet a working audit* — the end-to-end
+  write→read→re-verify-catches-tamper proof is folded into **2.2 (`verify-spend`) + 2.3 (red-team)**.
+  Acted on the one forward-looking fix: a live-wiring **header caveat** on `rail_response`
+  (capture body only, never an `Authorization` header — for when the live path populates it).
