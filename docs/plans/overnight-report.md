@@ -10,17 +10,28 @@ self-review on trivial doc/shell changes (noted per row).
 
 ## Status table
 
-| Milestone | Status | Confidence | Needs your eyes |
+Complete picture across `docs/plans/` (M1–M10), updated 2026-06-18.
+
+| Milestone | Status | What's left | Next move |
 |---|---|---|---|
-| M1.4 cleanups | ✅ done | high | no |
-| M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |f
-| M2 the moat | 🟢 **COMPLETE — settled cost now AGENT-SIGNED + un-forgeable end-to-end** (B1/A landed); standalone-auditable (`verify-spend`) | high | live-wire signing (flagged) |
-| M3 cross-rail (hermetic) | 🅿️ PARKED — gateway restructuring | — | no |
-| M3.2 x402 EIP-3009 + real settle | ✅ **done — key-leak FIXED + real settle** | high | reviewed (payment code) |
-| M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
-| M6 hardening | 🟢 concurrency ✅; fail-closed + injection substantially covered | high | no |
-| M5 console scaffold | ⏸️ not started — net-new frontend | — | no |
-| M8 demos | ⏸️ not started — needs M3/M4 gateway features | — | no |
+| **M1** live wrap | 🟡 mostly done | record→replay round-trip ✅, README/honest gate ✅ (1.4); **vendored binary (1.1) + client-config glue (1.3)** not built | folds into M7 packaging |
+| **M2** the moat | ✅ **COMPLETE** | settled cost is AGENT-SIGNED + un-forgeable end-to-end; standalone `verify-spend`. Nothing left *except* live-wire signing (the proxy.rs item below) | — |
+| **M3** cross-rail | 🟡 partial | **3.2 x402 key-leak fix + 2 real base-sepolia settles ✅**; **3.1 multi-rail live routing + 3.3 live aggregate proof** need the `proxy.rs` multi-downstream change | supervised (proxy.rs) |
+| **M4** delegation tree | 🟡 engine ✅ | attenuation + subtree-revoke enforced in the engine; **exposing it through `wrap`** (nested sub-agent, live) pending | supervised (proxy.rs) |
+| **M5** console | ⏸️ not started | net-new typed read-model + CLI dispatch (a small frontend) | net-new — your call |
+| **M6** hardening | 🟢 mostly done | concurrency property test ✅; fail-closed + injection substantially covered | ~done |
+| **M7** distribution | ⏸️ not started | release CI (cross-compile gateway → `vendor/` → npm), brew/uvx, onboarding docs | the "ship it" milestone — blocked by M1.1 |
+| **M8** demos | ⏸️ not started | package + film the scenarios (the flagship needs the live cross-rail path) | after the proxy.rs work |
+| **M9** SDK parity | ⏸️ not started | promote the bounded-authority core out of `auths-mcp-core`, fold into Python/Node, conformance-gate | larger refactor — you said hold |
+| **M10** DNS-AID interop | ⏸️ not started | DNS-AID record publisher + `policy`-bundle resolver + companion-draft sketch | net-new interop |
+
+### What's actually left, grouped by who's needed
+- **🔴 One supervised change unblocks the most — live-wire signing + multi-downstream routing in `proxy.rs::call_tool`.** Today the LIVE proxy does a boolean scope+budget check and does **not** sign per-call proofs/settlements on the wire (only the hermetic replay gate does). Wiring `chain.rs` signing into the live path is **simultaneously M2's last leg, M3.1 (multi-rail routing), and M4's gateway exposure** — one security-boundary change, must-review. **This is the critical path.**
+- **🟢 Then "ship it" (autonomous-friendly once the binary exists):** M1.1 vendored binary → M7 release CI + npm/brew publish + onboarding docs. M7 is blocked only by M1.1.
+- **🟡 Then demos:** M8 — package + film the now-live flagship (the moat + cross-rail).
+- **⚪ Net-new / larger, your call:** M5 console (frontend), M9 SDK parity (core promotion + Python/Node fold-in), M10 DNS-AID interop. None are blocking; each is a fresh body of work.
+
+**Bottom line:** the *security core* (M2 the moat) is done and proven. What remains is **(1)** making it live on the production wire (the one supervised proxy.rs change), **(2)** shipping it (M7), **(3)** demoing it (M8), and **(4)** breadth (M5/M9/M10). The detailed status-table rows below this section are the per-loop history; the table above is the current truth.
 
 ## Iteration log
 
