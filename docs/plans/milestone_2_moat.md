@@ -11,6 +11,18 @@
 >
 > Authorization (who-was-allowed-what) is already fully offline-verifiable from a proof's bytes + KEL today; A+B1 add the same property for **spend**, and make a **past run** re-verifiable.
 
+> ✅ **COMPLETE (2026-06-18) — the settled cost is now AGENT-SIGNED end-to-end.** The settlement
+> commit carries the cost in signed `Auths-Settle-*` trailers under a dedicated `settle` capability
+> and is **bound to its call** by the hash of the call commit (`Auths-Settle-Call` = `sha256(call_commit)`),
+> so a settlement cannot be moved onto a different call. `audit_spend_log` takes each settled cost from
+> that signed amount (not the operator-held rail response), requires a settlement on every non-zero
+> settled call, and ties the cumulative to signed material. Proven by `./run.sh --check`: a metered
+> Stripe-test settlement audits `consistent`, and three red-teams — altering the cost, binding a
+> settlement to the wrong call, dropping the settlement — each yield `tampered-proof`. Two adversarial
+> reviews drove the call-binding + mandatory-settlement + signed-cumulative checks (a critical
+> settlement-reuse hole was caught and fixed). Commits: `aa2c7e1c` `779573b9` `ad52113b` (auths) ·
+> `b20f447` (auths-mcp). **Only remaining M2 work: live-wire signing (the must-review follow-on below).**
+>
 > 🛠️ **BUILD PROGRESS (2026-06-18).**
 > - **Epic 2.4 DONE** — the audit data model (`AuditVerdict` typed enum + `SpendLogRecord` JSONL
 >   record) shipped in **`auths-mcp-core/src/audit.rs`** (37 tests green, clippy clean).

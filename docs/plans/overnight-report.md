@@ -13,8 +13,8 @@ self-review on trivial doc/shell changes (noted per row).
 | Milestone | Status | Confidence | Needs your eyes |
 |---|---|---|---|
 | M1.4 cleanups | ✅ done | high | no |
-| M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
-| M2 the moat | 🟢 **moat DEMONSTRATED + standalone-auditable** (`verify-spend`); **2.1/B1 parked** | high | **YES — pick B1 option A/B** |
+| M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |f
+| M2 the moat | 🟢 **COMPLETE — settled cost now AGENT-SIGNED + un-forgeable end-to-end** (B1/A landed); standalone-auditable (`verify-spend`) | high | live-wire signing (flagged) |
 | M3 cross-rail (hermetic) | 🅿️ PARKED — gateway restructuring | — | no |
 | M3.2 x402 EIP-3009 + real settle | ✅ **done — key-leak FIXED + real settle** | high | reviewed (payment code) |
 | M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
@@ -362,24 +362,34 @@ pushed; everything is on `dev-agentMoney` in both repos.
 | `87599c0b`,`fcd79bbd`,`eb85d7b3` | **M2** 2.4 audit model · 2.0 spend-log write · 2.2 `audit_spend_log` auditor |
 | `026a037b`,`f8eebd2` | **M2 2.3 — the moat PROVEN end-to-end**: a tampered log is caught by the offline audit (`./run.sh --check` red-team) |
 | `38da8983`,`a2428ad` | **M2 `verify-spend` CLI** — the moat as a standalone tool an external party runs from disk |
+| `aa2c7e1c`,`779573b9`,`ad52113b` (auths) · `b20f447` (auths-mcp) | **M2 agent-signed settled cost** (your decision: a dedicated `settle` capability) — the cost rides in signed `Auths-Settle-*` trailers bound to the call; the audit reads the AGENT-signed amount, not the operator's number. Metered settlement + 3 red-teams (alter-cost, wrong-call, missing-settlement) all green |
+| `50949dce` (auths) | comments: dropped internal planning labels (your correction) |
 
-**The adversarial reviews earned their place** — they caught and forced fixes for two real bugs (the
-M3.2 leak-regression coupling, and the auditor's `receipt.verdict` cost-gate hole) before commit.
+**The adversarial reviews earned their place** — they caught and forced fixes for **three** real bugs
+before commit: the M3.2 leak-regression coupling, the auditor's `receipt.verdict` cost-gate hole, and
+— on the agent-signed cost — a **critical** hole where a settlement wasn't bound to its call (an
+operator could reuse a cheap settlement on an expensive one). Each fix is now regression-tested.
 
-### Needs your eyes (ranked)
-1. **B1 — pick option A or B** (the only thing blocking the last M2 leg, agent-signed cost). A = add a
-   narrow `settle` capability to the grant (recommended); B = sign under the call's own capability.
-   See the Iteration-4 "M2 2.1" entry. Say "A" or "B" and I'll build it.
-2. **Live-wire signing** (must-review): wire `chain.rs` signing into `proxy.rs::call_tool` so a LIVE
-   run (not just the hermetic gate) writes auditable signed proofs. The moat is proven on the
-   hermetic gate today; this extends it to production traffic.
-3. **M3.2 EIP-3009 payment code** + **M2 verifier/audit path** — flagged must-review diffs, now landed.
+### What "agent-signed cost" means now (the moat, finished)
+A hostile operator writes the spend log and holds the rail responses, but **cannot under-report
+spend**: the per-call cost is taken from a value the agent SIGNED, bound to that exact call by a hash
+of its commit. Lowering the cost breaks the signature; reusing another call's settlement fails the
+binding; dropping the settlement on a settled call is a tamper; the cumulative is checked against
+signed material. All four are proven by `./run.sh --check` (metered settlement `consistent` + three
+red-teams → `tampered-proof`) and re-runnable offline by anyone via `verify-spend`.
+
+### Needs your eyes (ranked) — one item left
+1. **Live-wire signing** (must-review, the only remaining M2 work): the cost-signing + audit are
+   proven on the **hermetic replay gate**. The LIVE proxy path (`proxy.rs::call_tool`) still does a
+   boolean scope+budget check and does **not** yet sign per-call proofs/settlements on the wire, so a
+   *production* run isn't yet auditable the way the replay gate is. Wiring `chain.rs` signing into the
+   live path is the security boundary — do it supervised.
+2. **The landed must-review diffs** (already gated + reviewed): the M3.2 EIP-3009 payment code and the
+   verifier/audit path (`audit_spend_log` — the call-binding + cumulative checks).
 
 ### Recommended next session (supervised)
-1. **B1** (quick, once you pick A/B) → closes M2 fully (agent-signed cost).
-2. **The one gateway effort**: live-wire signing + multi-downstream routing in `proxy.rs` — unblocks
-   live-run audit (M2 production), M3 (cross-rail), and M4-e2e together. This is the security
-   boundary; do it with review.
-3. Then M8 flagship demos (the moat + cross-rail are now real) and M5 console.
+1. **Live-wire signing** + multi-downstream routing in `proxy.rs` — unblocks live-run audit (M2 in
+   production), M3 (cross-rail), and M4 nested delegation together. One gateway effort, with review.
+2. Then M8 flagship demos (the moat is now real end-to-end) and M5 console.
 
-**To resume the loop:** re-run `/loop` with the same prompt, or just answer **B1: A or B**.
+**To resume the loop:** re-run `/loop` with the same prompt — it reads this report and continues.
