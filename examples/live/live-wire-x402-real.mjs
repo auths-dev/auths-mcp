@@ -13,14 +13,18 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
-const GATEWAY_BIN =
+// Resolve to an ABSOLUTE path: the gateway derives the `auths` signing binary from this directory
+// and spawns it while serving, so a CWD-relative override would not resolve from the gateway's
+// working directory.
+const GATEWAY_BIN = resolve(
   process.env.GATEWAY_BIN ||
-  join(REPO, "..", "auths", "target", "release", "auths-mcp-gateway");
+    join(REPO, "..", "auths", "target", "release", "auths-mcp-gateway"),
+);
 const X402_SERVER = join(REPO, "examples", "payments", "adapters", "x402-adapter", "server.mjs");
 
 function fail(msg) {
@@ -65,15 +69,12 @@ if (existsSync(join(gwDir, "auths"))) env.AUTHS_BIN = join(gwDir, "auths");
 if (existsSync(join(gwDir, "auths-sign"))) env.AUTHS_SIGN = join(gwDir, "auths-sign");
 
 // --test-mode targets base-SEPOLIA (the TESTNET the wallet is funded on) — NOT mainnet. The settle is
-// still a REAL on-chain testnet tx: the adapter settles live whenever the wallet + facilitator are
-// present in ITS environment. The gateway passes its environment to the spawned downstream, so the
-// operator-held wallet (in the gateway's env, set from auths/.env) reaches the adapter without ever
-// crossing the agent-facing MCP wire — the agent connects with only its delegation, never the key.
-//
-// NOTE: the explicit `--custody-credential` injection is NOT used here because, in the current
-// `serve()`, an armed custody vault runs a ONE-SHOT preflight (`brokered_custody_check` runs the
-// downstream to completion) and returns — which never starts the live wire for a long-lived MCP
-// downstream. Making explicit custody compose with a long-lived MCP server is a flagged follow-on.
+// still a REAL on-chain testnet tx. The gateway CUSTODIES the wallet key + facilitator
+// (`--custody-credential`, by NAME — the value is read from the gateway's own env, set from
+// auths/.env) and injects them into the spawned downstream, so the operator-held wallet reaches the
+// adapter WITHOUT ever crossing the agent-facing MCP wire — the agent connects with only its
+// delegation, never the key. The x402 adapter is a long-lived MCP server: the gateway serves the
+// live wire with the credential injected into the served child (no one-shot preflight).
 const gw = spawn(
   GATEWAY_BIN,
   [
@@ -82,6 +83,8 @@ const gw = spawn(
     "--rail", "x402",
     "--scope", "paid.call",
     "--budget", "$5",
+    "--custody-credential", "X402_WALLET_PRIVATE_KEY",
+    "--custody-credential", "X402_FACILITATOR_URL",
     "--", "node", X402_SERVER,
   ],
   { env, stdio: ["pipe", "pipe", "pipe"] },
