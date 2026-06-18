@@ -16,7 +16,7 @@ self-review on trivial doc/shell changes (noted per row).
 | M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
 | M2 the moat | 🅿️ **PARKED — needs your decision** | — | **YES — read Iteration 3 finding** |
 | M3 cross-rail (hermetic) | ⏳ queued | — | — |
-| M3.2 x402 EIP-3009 + real settle | ⏳ queued | — | **yes (payment code)** |
+| M3.2 x402 EIP-3009 + real settle | 🅿️ **PARKED — supervised** | — | **YES — ⚠️ key-leak finding** |
 | M4 delegation tree | ⏳ queued | — | — |
 | M6 hardening | 🟡 partial — concurrency ✅ | high | no |
 | M5 console scaffold | ⏳ queued | — | — |
@@ -118,3 +118,32 @@ red-team) — I've fully scoped it. Parking now and moving to the cleanly-achiev
   explicit injection-safety scenario — though the *property* (model over-reaches → refused
   `outside-agent-scope`) is already demonstrated by the committed `examples/replay/transcript.json`
   fixture + `--check`. Marked M6 🟡 partial.
+
+### Iteration 5 — M3.2 x402 live settle → 🅿️ PARKED (supervised) + ⚠️ a real security finding
+
+Assessed before attempting, as planned. Two things make the live settle a supervised task, not
+a clean autonomous one — and one of them is a bug you should see:
+
+1. **⚠️ KEY-LEAK (must fix, must-review).** The current
+   `examples/payments/adapters/x402-adapter/settle.mjs` live path does:
+   `fetch(.../settle, { body: JSON.stringify({ requirements, walletKey: env.X402_WALLET_PRIVATE_KEY }) })`
+   — i.e. it **transmits the wallet private key to the facilitator**. That's the exact leak M3.2
+   exists to remove. (Blast radius is low — it's a throwaway base-sepolia burner, and the live
+   path isn't exercised by the hermetic gate — but it must not ship.) I did **not** rewrite it
+   autonomously: it's must-review payment code and a correct replacement needs the items below.
+2. **Facilitator API unconfirmed.** `GET https://x402.org/facilitator/supported` just redirects
+   (no JSON schema returned), so the exact `/settle` request shape isn't pinned from here. The
+   x402 spec says `/settle` takes `{ x402Version, paymentPayload, paymentRequirements }` where
+   `paymentPayload` is the **signed EIP-3009 authorization** (NOT a walletKey).
+3. **Non-standard flow.** This is a standalone direct settle (no resource-server 402), so the
+   `paymentRequirements` + `paymentPayload` must be constructed by hand.
+
+**The correct rewrite (scoped for the supervised session, ~1 focused build):** load the key from
+`auths/.env`; with `viem`, `signTypedData` an EIP-3009 `transferWithAuthorization`
+(domain: name "USDC", version "2", chainId 84532, verifyingContract = base-sepolia USDC;
+message: {from, to, value, validAfter, validBefore, nonce}); assemble the x402 "exact"-scheme
+EVM `paymentPayload` from that signature; POST `{ x402Version, paymentPayload, paymentRequirements }`
+to `/settle`; the **key signs locally and NEVER leaves the process** — only the signature is sent.
+First verify the signature recovers the burner address locally (no broadcast), THEN do one real
+base-sepolia settle for the tx hash. Worth doing with you watching (real key + a live broadcast).
+Parked; moving to M4 (a clean self-contained engine test).
