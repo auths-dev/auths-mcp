@@ -18,7 +18,7 @@ self-review on trivial doc/shell changes (noted per row).
 | M3 cross-rail (hermetic) | ⏳ queued | — | — |
 | M3.2 x402 EIP-3009 + real settle | ⏳ queued | — | **yes (payment code)** |
 | M4 delegation tree | ⏳ queued | — | — |
-| M6 hardening | ⏳ queued | — | — |
+| M6 hardening | 🟡 partial — concurrency ✅ | high | no |
 | M5 console scaffold | ⏳ queued | — | — |
 | M8 demos | ⏳ queued | — | — |
 
@@ -103,3 +103,18 @@ addition + one design call — both flagged, neither safe to decide unattended:
 `verify_commit_against_kel_scoped` + `rail::extract`, typed `AuditVerdict`, + the lift/forge/drop
 red-team) — I've fully scoped it. Parking now and moving to the cleanly-achievable milestones
 (M3/M4/M6) so the night still delivers committed, reviewed code.
+
+### Iteration 4 — M6 concurrency property test ✅ (committed 200753bb, in auths)
+- Added `concurrent_calls_never_exceed_the_cross_rail_cap` to `auths-mcp-core/src/budget.rs`: 50
+  OS threads race one reserve→settle each (the "rail" touched OUTSIDE the lock — the genuine
+  concurrency window) against a $10 cap. Under any interleaving exactly 10 settle, 40 refuse,
+  none stranded, the cross-rail total never exceeds the cap.
+- Gate: **5/5 non-flaky** + full crate **33 passed** + clippy clean.
+- **Adversarial review: SOUND** — the reviewer mutation-tested it (dropped `reserve`'s Σ(holds)
+  term → the test FAILED 5/5, proving it catches the over-commit bug), confirmed real threads +
+  a real reserve→settle window, and proved the outcome is interleaving-independent (not flaky).
+  No findings.
+- M6 remaining (not yet done): fail-closed edges on downstream/gateway errors (proxy.rs) and an
+  explicit injection-safety scenario — though the *property* (model over-reaches → refused
+  `outside-agent-scope`) is already demonstrated by the committed `examples/replay/transcript.json`
+  fixture + `--check`. Marked M6 🟡 partial.
