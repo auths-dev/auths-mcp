@@ -17,7 +17,7 @@ self-review on trivial doc/shell changes (noted per row).
 | M2 the moat | 🅿️ **PARKED — needs your decision** | — | **YES — read Iteration 3 finding** |
 | M3 cross-rail (hermetic) | ⏳ queued | — | — |
 | M3.2 x402 EIP-3009 + real settle | 🅿️ **PARKED — supervised** | — | **YES — ⚠️ key-leak finding** |
-| M4 delegation tree | ⏳ queued | — | — |
+| M4 delegation tree | ✅ engine-covered (gateway e2e pending) | high | no |
 | M6 hardening | 🟡 partial — concurrency ✅ | high | no |
 | M5 console scaffold | ⏳ queued | — | — |
 | M8 demos | ⏳ queued | — | — |
@@ -147,3 +147,41 @@ to `/settle`; the **key signs locally and NEVER leaves the process** — only th
 First verify the signature recovers the burner address locally (no broadcast), THEN do one real
 base-sepolia settle for the tx hash. Worth doing with you watching (real key + a live broadcast).
 Parked; moving to M4 (a clean self-contained engine test).
+
+### Iteration 6 — M4 delegation tree → ✅ already engine-covered (no redundant test added)
+
+Recon'd the real delegation engine before writing anything. Every property M4 asks for is
+**already comprehensively tested** in `auths` — adding more would be a redundant fake-green, so I
+did not:
+- **Single-level attenuation** (scope/TTL/depth ⊆ parent): `auths-sdk/.../agents/scope.rs` tests
+  `capability_subset_valid` / `capability_subset_invalid` / `ttl_exceeding_parent_is_rejected` /
+  `depth_limit_is_rejected`.
+- **Treasury aggregate-cap** (Σ children ≤ parent → `AggregateCapExceeded`): `treasury.rs`
+  `subdelegation_within_parent_holding_holds_and_overflow_is_refused` + 5 more, plus
+  `tests/integration.rs`.
+- **Subtree / kill-switch revocation** (`revoke_batch`): `tests/cases/kill_switch.rs` (batch revoke
+  + idempotent re-revoke).
+- **Transitive revocation** (a delegate of a revoked delegator is rejected): the verifier's
+  `DeviceRevoked` / `SignedAfterRevocation` verdicts (`commit_kel.rs`, ordered by KEL position) +
+  `tests/cases/agents.rs` (`rotate_revoked_agent_rejected`, `agents_revoke_marks_revoked`, …).
+
+**The honest M4 gap is the gateway END-TO-END** (the `auths wrap` command spawning a *nested*
+sub-agent gateway bounded ⊆ its parent, with subtree revocation flowing through) — that's
+**gateway wiring in `proxy.rs`**, the same class of work as M3, not an engine test.
+
+---
+
+## 🔭 Meta-finding (the through-line of tonight)
+
+Three milestones (M2, M4, and — by the spec — M3) converge on the same truth: **the `auths`
+engine is mature and thoroughly tested** (verifier, delegation, treasury, budget, revocation).
+The remaining auths-mcp milestones are **not engine gaps — they're one piece of gateway work**:
+extend `auths-mcp-gateway/src/proxy.rs` (today a single-downstream proxy that doesn't persist) to
+(i) front **multiple rails** under one budget (M3), (ii) wrap **nested sub-agents** (M4 e2e),
+(iii) **persist a proof+receipt+rail-response log** so the offline audit can exist (M2), and
+(iv) tighten **fail-closed** edges (rest of M6). One focused, reviewable gateway effort unblocks
+M2/M3/M4-e2e/M6 together — best done with you in the loop (it's the security boundary). M5
+(console) is net-new frontend; M8's flagship demos depend on (i)–(ii) landing first.
+
+This is why the night's clean, self-contained wins (M1.4, M1, M6-concurrency) are committed and
+the rest are parked with precise scopes rather than forced.
