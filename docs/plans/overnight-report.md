@@ -47,11 +47,36 @@ The critical-path item above (#1) — **live-wire signing in `proxy.rs::call_too
 
 **Proven by a real MCP session** (not just replay): `node auths-mcp/examples/live/live-wire-check.mjs` spawns the gateway wrapping a stub downstream, drives an in-scope `read_file` (allowed + signed) and an out-of-scope `write_file` (refused `outside-agent-scope`), then runs `verify-spend` over the written log → **`consistent — 2 call(s)`**. `./run.sh --check` stays fully green (replay smoke + self-audit + the three settlement red-teams).
 
-**Next (in this loop): the real base-sepolia x402 settle through the live wire** — wrap the x402 adapter as the downstream, settle a real sub-cent USDC payment via the funded wallet, extract the actual cost from the real settlement response, sign the settlement, and record the on-chain tx hash here. *(This section gets the tx hash + the exact re-run command when it lands.)*
+### 💸 Metered payments + a REAL on-chain settle through the live wire — DONE
+
+The live wire now **meters a wrapped payment rail and settles real money**, end to end:
+- For a wrapped rail (the OPERATOR sets `--rail x402`), the gateway reads the **actual** cost from the rail's own response, settles it into the durable cross-rail cap, and **signs a settlement bound to the call** — so the audit sums the agent-signed actual, never a number the agent declared. Because the operator (not the agent) sets the rail, **an agent cannot bypass metering** by omitting a field (`--rail` is the bypass-closer). Committed: auths `c5f47f39`, auths-mcp `d3d6d6c`.
+- **Hermetic proof** (no money): `node examples/live/live-wire-x402-check.mjs` wraps a stub returning a recorded x402 settlement → the gateway extracts the cost + signs a settlement → `verify-spend` audits the agent-signed **$1.50** consistent.
+- **REAL base-sepolia settle** (committed auths-mcp `80dcdb5`): `examples/live/live-wire-x402-real.mjs` wraps the real x402 adapter with the funded testnet wallet and drives one **1-cent base-sepolia USDC payment** through the live gateway — signed, gated, settled on-chain, the actual cost extracted + signed, and re-verified offline as `consistent`.
+
+  > **On-chain proof — base-sepolia tx `0x034572eaac4bf7bd2059a166ce67b3166b3283b7b1af57c1eb4d6d3113ac5cb0`** (verify on a base-sepolia explorer).
+
+  The wallet is **operator-held** (the gateway's env, set from `auths/.env`, inherited by the spawned adapter) and never crosses the agent MCP wire, a log, or a commit; the key signs EIP-3009 locally in the adapter. Adversarial review of the real-money driver: **SOUND** (no key leak; settle real, not faked; testnet-only; parks rather than fabricating).
+
+  **Honest note:** the first two settle attempts **parked before spending anything** — (1) without `--test-mode` the gateway resolved to real-money *mainnet* and refused (the safety rail working); (2) `--custody-credential` triggers a one-shot custody preflight that never starts the live wire for a long-lived MCP downstream. The driver uses `--test-mode` + env-inheritance custody as the demo-acceptable path.
+
+**Re-run commands (all green):**
+```
+# live-wire signing (non-metered): a real MCP session, allowed + refused, audited offline
+node auths-mcp/examples/live/live-wire-check.mjs
+# metered x402 (hermetic, recorded settlement → signed settlement → audit)
+node auths-mcp/examples/live/live-wire-x402-check.mjs
+# REAL base-sepolia settle through the live wire (spends ~1 testnet cent)
+set -a; . auths/.env; set +a
+GATEWAY_BIN=auths/target/release/auths-mcp-gateway node auths-mcp/examples/live/live-wire-x402-real.mjs
+```
+
+**Commit map (live-wire work):** `b979c931` (sign+gate+persist) · `4a3c4a4` (scripted live-wire check) · `c5f47f39` (meter a wrapped rail) · `d3d6d6c` (hermetic metered check) · `80dcdb5` (real on-chain settle) · report at this commit.
 
 **Flagged for your review (not blocking):**
 - **Pre-provisioned delegation.** Today `serve()` mints a fresh agent delegation per startup (fine for the demo + the audit is internally consistent), but for production the gateway should resolve a **pre-provisioned** delegation bound to the real agent DID, so the audit's *subject* isn't self-selected.
 - **Signed back-link for completeness.** Editing a record is caught (breaks the signature); **dropping/reordering** records is not yet caught (no per-record back-link). A signed predecessor link + a continuity check in the audit closes it. Scoped, not yet built.
+- **Explicit custody for a long-lived MCP downstream.** `--custody-credential` runs a one-shot preflight in `serve()` that returns before the live wire starts, so it can't yet inject a credential into a *long-lived* wrapped MCP server. The real settle used env-inheritance instead; making explicit custody compose with the served wire is the productized fix.
 
 ## Iteration log
 
