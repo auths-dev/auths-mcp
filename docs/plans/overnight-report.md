@@ -33,6 +33,26 @@ Complete picture across `docs/plans/` (M1–M10), updated 2026-06-18.
 
 **Bottom line:** the *security core* (M2 the moat) is done and proven. What remains is **(1)** making it live on the production wire (the one supervised proxy.rs change), **(2)** shipping it (M7), **(3)** demoing it (M8), and **(4)** breadth (M5/M9/M10). The detailed status-table rows below this section are the per-loop history; the table above is the current truth.
 
+---
+
+## 🟢 Live-wire signing — the production wire now signs + audits (authorized + built 2026-06-18)
+
+The critical-path item above (#1) — **live-wire signing in `proxy.rs::call_tool`** — is **done and proven end-to-end.** The live `wrap` proxy used to do a boolean scope check + budget enforcement; it now does the full cryptographic path the hermetic replay gate does.
+
+**What's live (committed: auths `b979c931`, auths-mcp `4a3c4a4`):**
+- Every brokered `tools/call` is **signed as the agent** (`chain.sign_call`) and authenticated through the **same `PerCallGate::judge`** the replay path uses — proof authenticity + scope ⊆ grant + liveness + revocation, reserved against the durable cross-rail counter — **before** the downstream is touched.
+- Forwarded **and refused** calls are appended to a spend log; **`verify-spend` re-verifies it offline**, trusting neither the gateway nor its operator.
+- **Scope is now enforced cryptographically** (the signed `Auths-Scope` ⊆ the delegator-anchored grant), so the old boolean scope check + the parallel `enforce_wire_budget` impl + its redundant parity tests were **removed** (the budget engine keeps full coverage in `budget.rs`).
+- Adversarial review verdict: **SOUND** on the three core claims — no bypass (sign→judge→forward is strictly ordered + fail-closed), scope/forgery enforced offline, the signing key never leaves the gateway; concurrency race-safe. The completeness findings (refusals now logged ✓) were fixed; the rest are flagged below.
+
+**Proven by a real MCP session** (not just replay): `node auths-mcp/examples/live/live-wire-check.mjs` spawns the gateway wrapping a stub downstream, drives an in-scope `read_file` (allowed + signed) and an out-of-scope `write_file` (refused `outside-agent-scope`), then runs `verify-spend` over the written log → **`consistent — 2 call(s)`**. `./run.sh --check` stays fully green (replay smoke + self-audit + the three settlement red-teams).
+
+**Next (in this loop): the real base-sepolia x402 settle through the live wire** — wrap the x402 adapter as the downstream, settle a real sub-cent USDC payment via the funded wallet, extract the actual cost from the real settlement response, sign the settlement, and record the on-chain tx hash here. *(This section gets the tx hash + the exact re-run command when it lands.)*
+
+**Flagged for your review (not blocking):**
+- **Pre-provisioned delegation.** Today `serve()` mints a fresh agent delegation per startup (fine for the demo + the audit is internally consistent), but for production the gateway should resolve a **pre-provisioned** delegation bound to the real agent DID, so the audit's *subject* isn't self-selected.
+- **Signed back-link for completeness.** Editing a record is caught (breaks the signature); **dropping/reordering** records is not yet caught (no per-record back-link). A signed predecessor link + a continuity check in the audit closes it. Scoped, not yet built.
+
 ## Iteration log
 
 ### Iteration 1 — setup + M1.4 (start)
