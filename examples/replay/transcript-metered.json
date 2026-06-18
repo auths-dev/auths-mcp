@@ -1,0 +1,14 @@
+{
+  "//": "A metered paid call over a Stripe test-mode rail. The cost is EXTRACTED from the recorded charge response (fixtures/stripe-charge.test.json: amount_captured=300 -> $3.00), settled in-budget under a $5 cap, and the agent SIGNS a settlement commit anchoring that cost. The offline self-audit then reads the AGENT-SIGNED cost (bound to this call), re-derives spend, and confirms it as consistent — the cost cannot be lowered without the agent's key.",
+  "scenario": "metered-settlement",
+  "grant": { "scope": ["paid.call"], "budget": "$5.00", "ttl": "30m" },
+  "calls": [
+    {
+      "tool": "paid_call",
+      "rail": "stripe",
+      "args": { "endpoint": "/charge" },
+      "response_fixture": "stripe-charge.test.json",
+      "expect": "allowed"
+    }
+  ]
+}

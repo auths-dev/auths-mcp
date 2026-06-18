@@ -1,0 +1,16 @@
+{
+  "//": "A recorded Stripe TEST-MODE charge response (livemode:false — no real money). The gateway extracts the settled cost from charge.amount_captured (300 cents = $3.00) and the receipt reference from charge.id; the agent then signs a settlement commit anchoring that extracted cost. Shape per docs.stripe.com/api/charges/object.",
+  "rail": "stripe",
+  "charge": {
+    "id": "ch_3MmlLrLkdIwHu7ix0snN0B15",
+    "object": "charge",
+    "amount": 300,
+    "amount_captured": 300,
+    "amount_refunded": 0,
+    "currency": "usd",
+    "captured": true,
+    "paid": true,
+    "status": "succeeded",
+    "livemode": false
+  }
+}

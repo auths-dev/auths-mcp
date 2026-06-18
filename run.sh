@@ -146,3 +146,53 @@ vs_out="$("$GATEWAY_BIN" verify-spend $audit_args 2>&1 || true)"
 printf '%s' "$vs_out" | grep -q "verify-spend: consistent" \
   || { printf '%s\n' "$vs_out" | sed 's/^/    /'; fail "verify-spend RED — the standalone CLI did not re-audit the log as consistent"; }
 ok "verify-spend CLI GREEN — a standalone process re-audited the gateway-written log offline as consistent"
+
+# ── Metered settlement: a paid call signs its cost, and the offline audit reads the SIGNED amount ──
+# A metered Stripe test-mode charge ($3.00 extracted from the recorded response) settles in-budget;
+# the agent signs a settlement commit anchoring that cost, bound to the call. The self-audit reads
+# the AGENT-SIGNED amount (not the operator's number) and re-derives spend as consistent — proof the
+# signed-cost path runs end-to-end, beyond the read/write transcript that settles nothing.
+say "metered settlement: a paid call settles, the agent signs the cost, the audit reads it…"
+metered_tx="$HERE/examples/replay/transcript-metered.json"
+metered_fixtures="$HERE/examples/replay/fixtures"
+[ -f "$metered_tx" ] || fail "metered transcript missing: $metered_tx"
+mlab="$SCRATCH/lab-metered"
+metered_out="$(LAB_DIR="$mlab" AUTHS_HOME="$mlab/registry" AUTHS_REPO="$mlab/registry" \
+  AUTHS_KEYCHAIN_FILE="$mlab/keys.enc" AUTHS_MCP_RAIL_FIXTURES="$metered_fixtures" \
+  node "$LAUNCHER" replay --transcript "$metered_tx" 2>&1 || true)"
+# The call must actually settle the extracted $3.00 (guards against a vacuous "consistent" over an
+# empty/zero settlement), AND the offline audit must re-derive it as consistent (which, for a
+# non-zero settled call, REQUIRES a valid settlement bound to the call — see audit_spend_log).
+printf '%s' "$metered_out" | grep -qF 'settled_actual=$3.00' \
+  || { printf '%s\n' "$metered_out" | sed 's/^/    /'; fail "metered settlement RED — the paid call did not settle the extracted \$3.00"; }
+printf '%s' "$metered_out" | grep -q "audit: consistent" \
+  || { printf '%s\n' "$metered_out" | sed 's/^/    /'; fail "metered settlement RED — the agent-signed settlement did not audit as consistent"; }
+ok "metered settlement GREEN — the agent-signed settled cost (\$3.00) re-derived offline as consistent"
+
+# Red-team: alter the agent's SIGNED settled cost (flip a byte of the settlement commit). The
+# signature no longer matches, so the offline audit refuses to trust the cost and reports
+# tampered-proof — an operator cannot lower the signed amount without the agent's key.
+say "metered red-team: altering the agent's signed settled cost, then re-auditing…"
+rtlab="$SCRATCH/lab-metered-tamper"
+rt_out="$(LAB_DIR="$rtlab" AUTHS_HOME="$rtlab/registry" AUTHS_REPO="$rtlab/registry" \
+  AUTHS_KEYCHAIN_FILE="$rtlab/keys.enc" AUTHS_MCP_RAIL_FIXTURES="$metered_fixtures" \
+  AUTHS_MCP_SETTLE_TAMPER=1 \
+  node "$LAUNCHER" replay --transcript "$metered_tx" 2>&1 || true)"
+printf '%s' "$rt_out" | grep -q "audit: tampered-proof" \
+  || { printf '%s\n' "$rt_out" | sed 's/^/    /'; fail "metered red-team RED — an altered signed cost was NOT caught by the offline audit"; }
+ok "metered red-team GREEN — altering the agent-signed cost was caught (tampered-proof)"
+
+# Red-team: a VALID settlement signed for a DIFFERENT call — an operator moving a genuinely-signed
+# cheaper settlement onto another call. The signature is intact (so this exercises the call-binding
+# check, not the signature check), but the binding no longer matches this call's commit, so the
+# audit rejects it. Without this the binding regression would ship green: the cost-alteration
+# red-team above breaks the signature and short-circuits before the binding is ever checked.
+say "metered red-team: a valid settlement bound to the WRONG call, then re-auditing…"
+rblab="$SCRATCH/lab-metered-rebind"
+rb_out="$(LAB_DIR="$rblab" AUTHS_HOME="$rblab/registry" AUTHS_REPO="$rblab/registry" \
+  AUTHS_KEYCHAIN_FILE="$rblab/keys.enc" AUTHS_MCP_RAIL_FIXTURES="$metered_fixtures" \
+  AUTHS_MCP_SETTLE_REBIND=1 \
+  node "$LAUNCHER" replay --transcript "$metered_tx" 2>&1 || true)"
+printf '%s' "$rb_out" | grep -q "audit: tampered-proof" \
+  || { printf '%s\n' "$rb_out" | sed 's/^/    /'; fail "metered rebind red-team RED — a settlement bound to the wrong call was NOT caught by the offline audit"; }
+ok "metered rebind red-team GREEN — a settlement bound to the wrong call was caught (tampered-proof)"
