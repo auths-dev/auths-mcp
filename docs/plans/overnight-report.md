@@ -14,7 +14,7 @@ self-review on trivial doc/shell changes (noted per row).
 |---|---|---|---|
 | M1.4 cleanups | ✅ done | high | no |
 | M1 live transcript | ✅ done (round-trip) | high | no — but see note¹ |
-| M2 the moat | ⏳ queued | — | **yes (verifier)** |
+| M2 the moat | 🅿️ **PARKED — needs your decision** | — | **YES — read Iteration 3 finding** |
 | M3 cross-rail (hermetic) | ⏳ queued | — | — |
 | M3.2 x402 EIP-3009 + real settle | ⏳ queued | — | **yes (payment code)** |
 | M4 delegation tree | ⏳ queued | — | — |
@@ -58,3 +58,48 @@ self-review on trivial doc/shell changes (noted per row).
   burn repeated API runs chasing emergent behavior).
 - Review: data + 1-line shell → self-reviewed (secret scan clean, both `--check` paths green,
   fixture intact). Did NOT overwrite the committed fixture.
+
+### Iteration 3 — M2 the moat → deep recon → 🅿️ PARKED (needs your decision)
+
+I went deepest here as asked, and the deep read of the real data model says the moat **cannot
+be built honestly as specced yet** — it presupposes persisted data the gateway doesn't produce.
+I will not fake an audit over data that doesn't exist. The findings (grounded; file refs in
+`milestone_2_moat.md`):
+
+1. **The settled cost is never signed.** The per-call signed git commit
+   (`auths-mcp-gateway/src/chain.rs`) covers only `{tool, args}` + an `Auths-Scope` capability
+   trailer. The actual rail-settled amount is *not* in the signed proof — so "recompute true
+   spend from the signed chain alone" is **impossible** without also recording rail responses.
+2. **Proof commits are throwaway.** Each call's commit is created in a *fresh per-call git
+   repo*, signed, verified, then discarded. There is **no persistent proof chain** on disk for
+   an offline tool to re-verify later. The receipt keeps only the commit **SHA** (`proof_ref`),
+   not the commit **bytes** — so the proofs can't be re-run through
+   `verify_commit_against_kel_scoped` after the fact.
+3. **Receipts aren't persisted in the live path.** `proxy.rs` only `eprintln!`s receipts; the
+   replay path only `println!`s them. There's no receipt log on disk to audit.
+4. **`auths audit` is already taken** — it's the dev/commit-signing compliance report
+   (`auths-cli/src/commands/audit.rs`), a different feature. The spend-audit needs a new name
+   (e.g. `auths verify-spend`).
+5. The operator's `SettledCounter` (`budget-ledger/<key>.json`) is durable but **not anchored**
+   to the KEL — exactly the thing the audit must not trust, confirmed.
+
+**What IS honestly verifiable today (no change):** authorization — *who was allowed to do what*
+— is fully independently checkable from a proof's commit bytes + the issuer KEL via
+`verify_commit_against_kel_scoped` (forged/revoked/expired/out-of-scope all caught). **What is
+NOT yet verifiable offline:** the *spend* (cost isn't signed) and re-verification of a *past*
+run (proofs/receipts aren't persisted).
+
+**The decision for you (why this is parked, not faked):** the real moat needs a gateway-side
+addition + one design call — both flagged, neither safe to decide unattended:
+- **(A) Persist a proof+receipt log:** have the live gateway write each call's signed commit
+  bytes + receipt + the raw rail response to an append-only log, so an offline `auths
+  verify-spend` can re-verify every proof and re-extract every cost. (Gateway change.)
+- **(B) Anchor the settled cost:** either include the rail's settlement reference/amount in the
+  signed material, or accept that cost is rail-attested (re-derived from the recorded response)
+  rather than agent-signed. This changes the moat's honest claim and touches signing — a
+  **crypto-semantics decision** the rules say to flag, not make autonomously.
+
+**Once you pick (A)+(B), the audit is ~1 focused build** (new `verify-spend` reusing the *same*
+`verify_commit_against_kel_scoped` + `rail::extract`, typed `AuditVerdict`, + the lift/forge/drop
+red-team) — I've fully scoped it. Parking now and moving to the cleanly-achievable milestones
+(M3/M4/M6) so the night still delivers committed, reviewed code.
