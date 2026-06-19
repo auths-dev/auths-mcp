@@ -8,7 +8,7 @@
 // refused, and a declared one settles and advances the cap.
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -162,6 +162,20 @@ async function main() {
   if (!/verify-spend: consistent\b/.test(vsOut) || !/\$1\.50/.test(vsOut))
     fail(`the cap log did NOT re-verify as consistent with exactly the $1.50 declared spend:\n${vsOut}`);
   ok("verify-spend GREEN — only the declared $1.50 advanced the cap; the bypass settled nothing");
+
+  // The durable counter the wire advanced must be the SAME one the printed verify-spend args
+  // resolve to: derive the ledger path from the command's own --registry/--agent (exactly as the
+  // audit does via CounterRef::for_agent) and assert the wire wrote the $1.50 high-water THERE.
+  const registry = args[args.indexOf("--registry") + 1];
+  const agent = args[args.indexOf("--agent") + 1];
+  const counterPath = join(registry, "budget-ledger", `${agent.replace(/^did:keri:/, "")}.json`);
+  if (!existsSync(counterPath))
+    fail(`the wire advanced no counter at the location verify-spend resolves to: ${counterPath}`);
+  const counter = JSON.parse(readFileSync(counterPath, "utf8"));
+  if (counter.settled_high_water_cents !== 150)
+    fail(`the counter verify-spend resolves to does not hold the settled $1.50 (got ${counter.settled_high_water_cents}c): ${counterPath}`);
+  ok("durable counter located — verify-spend's --registry/--agent open the SAME counter the wire advanced ($1.50)");
+
   console.log(
     "✓ live-wire-cap check GREEN — an omitted spend amount cannot skip the cross-rail cap",
   );
