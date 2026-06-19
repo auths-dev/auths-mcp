@@ -213,6 +213,35 @@ printf '%s' "$rb_out" | grep -q "audit: tampered-proof" \
   || { printf '%s\n' "$rb_out" | sed 's/^/    /'; fail "metered rebind red-team RED — a settlement bound to the wrong call was NOT caught by the offline audit"; }
 ok "metered rebind red-team GREEN — a settlement bound to the wrong call was caught (tampered-proof)"
 
+# Red-team: truncate the TAIL of a metered log (drop the most-recent settled record). The survivors'
+# back-link is still intact — so this is NOT dropped-call — but the durable cross-rail counter still
+# holds the full settled high-water the run advanced, so the re-derived total falls BELOW it and the
+# audit reports budget-mismatch. This catches the tail-truncation the back-link alone cannot, by
+# cross-checking the re-derived total against the verifier-held counter (which truncating the log
+# never touches). Disabling the cross-check (or mis-keying the counter) turns this RED.
+say "tail-truncation red-team: dropping the last settled record from a metered log, then re-auditing…"
+ttlab="$SCRATCH/lab-metered-trunc"
+tt_out="$(LAB_DIR="$ttlab" AUTHS_HOME="$ttlab/registry" AUTHS_REPO="$ttlab/registry" \
+  AUTHS_KEYCHAIN_FILE="$ttlab/keys.enc" AUTHS_MCP_RAIL_FIXTURES="$metered_fixtures" \
+  node "$LAUNCHER" replay --transcript "$metered_tx" 2>&1 || true)"
+# Baseline: the intact metered log audits consistent (the counter holds the full $3.00).
+printf '%s' "$tt_out" | grep -q "audit: consistent" \
+  || { printf '%s\n' "$tt_out" | sed 's/^/    /'; fail "tail-truncation RED — the metered baseline did not audit consistent"; }
+tt_args="$(printf '%s' "$tt_out" | sed -n 's/.*audit-cmd: //p' | head -1)"
+[ -n "$tt_args" ] || fail "tail-truncation RED — the metered replay emitted no audit-cmd line"
+tt_log="$(printf '%s' "$tt_args" | sed -n 's/.*--log \([^ ]*\).*/\1/p')"
+{ [ -n "$tt_log" ] && [ -f "$tt_log" ]; } || fail "tail-truncation RED — could not resolve the metered spend-log path"
+trunc_log="$tt_log.truncated"
+# Drop the LAST record: the survivors' Auths-Prev chain stays intact, so only the durable cross-check
+# (not the back-link) can catch this.
+sed '$d' "$tt_log" > "$trunc_log"
+tt_trunc_args="$(printf '%s' "$tt_args" | sed "s#--log $tt_log#--log $trunc_log#")"
+# shellcheck disable=SC2086
+tt_vs="$("$GATEWAY_BIN" verify-spend $tt_trunc_args 2>&1 || true)"
+printf '%s' "$tt_vs" | grep -q "budget-mismatch" \
+  || { printf '%s\n' "$tt_vs" | sed 's/^/    /'; fail "tail-truncation RED — a dropped tail record was NOT caught (no budget-mismatch)"; }
+ok "tail-truncation red-team GREEN — a dropped tail record was caught by the durable cross-check (budget-mismatch)"
+
 # ── Live-wire checks: drive the REAL gateway binary as a live stdio MCP server (not replay) ──
 # These exercise the call_tool path the replay gate cannot reach — per-call signing, gating,
 # metering, and the cross-rail cap on the wire — each in its own sandbox, asserting its own GREEN.
