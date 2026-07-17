@@ -58,12 +58,12 @@ because the moat *is* the product.
 - **Why:** replay-green proves the codec; adoption needs a real agent, real tool, real refusal.
 - **Ships:** a live harness driving a real Claude tool-loop through the gateway against a
   **stock** MCP server (filesystem/GitHub/browser); the 4 verdicts fire live; fix the stale
-  README; publish a working `npx @auths/mcp wrap …` path.
+  README; publish a working `npx @auths-dev/mcp wrap …` path.
 - **Done-when:** a non-author runs one command and watches a live agent get refused
   over-budget / out-of-scope on a tool the author didn't write — no replay, no fixture.
 
 **Epics → subtasks** *(the live path already exists — `auths-mcp-gateway/src/proxy.rs::call_tool`, lines 425–499: scope check → `enforce_wire_budget` → downstream forward. This is wiring + distribution, not new enforcement.)*
-- **M1.1 Vendor + real install path** — `auths-mcp` — implement `packages/auths-mcp/build.mjs` (today a no-op) to fetch the prebuilt `auths-mcp-gateway` per platform into `packages/auths-mcp/vendor/<platform>/`; `bin/auths-mcp.mjs::resolveGateway()` already consumes it; smoke `npx @auths/mcp wrap …` with **no** `GATEWAY_BIN` set.
+- **M1.1 Vendor + real install path** — `auths-mcp` — implement `packages/auths-mcp/build.mjs` (today a no-op) to fetch the prebuilt `auths-mcp-gateway` per platform into `packages/auths-mcp/vendor/<platform>/`; `bin/auths-mcp.mjs::resolveGateway()` already consumes it; smoke `npx @auths-dev/mcp wrap …` with **no** `GATEWAY_BIN` set.
 - **M1.2 Live wrap, real model, stock server** — `auths` (`crates/auths-mcp-gateway/src/proxy.rs::run_wrap`) + `auths-mcp` (reuse `examples/live/record.py`'s `claude-opus-4-8` tool-loop as the driver) — drive a real Claude session through `wrap` against a stock `@modelcontextprotocol/server-*`; confirm `Verdict::{OutsideAgentScope, UsageCapExceeded, Revoked, AgentExpired}` fire **live**, not just in `replay.rs`.
 - **M1.3 Client glue** — `auths-mcp/clients/` — real, tested `mcp.json` drop-ins for Claude Desktop, Claude Code, Cursor, Codex (today only a README pattern exists).
 - **M1.4 De-stale + honest gate** — `auths-mcp` — fix the README's "Scaffold… exits non-zero" (the `--check` is green via `GATEWAY_BIN → ../auths/target/release/auths-mcp-gateway`); document the two *distinct* facts (replay-green vs npm-vendored-pending); replace `run.sh`'s `grep verdict.*<expected>` with a structured assertion.
@@ -241,14 +241,14 @@ let resp = downstream.call_tool(req).await
 
 ### M7 — Distribution + onboarding
 - **Why:** the wedge is a single install or it isn't a wedge.
-- **Ships:** published `@auths/mcp` (npm) + `brew install auths-mcp` + prebuilt binaries
+- **Ships:** published `@auths-dev/mcp` (npm) + `brew install auths-mcp` + prebuilt binaries
   (macOS arm64/x64, Linux); verified config glue for Claude Desktop / Claude Code / Cursor /
   Codex; a 5-minute quickstart + real-money opt-in + troubleshooting; an accurate README.
 - **Done-when:** a stranger goes from zero to a bounded live agent in <10 minutes on a clean
   machine, in their own client.
 
 **Epics → subtasks** *(the launcher's `resolveGateway()` already expects `vendor/<platform>/auths-mcp-gateway`; `build.mjs` is a no-op today. This is the release pipeline that fills that path.)*
-- **M7.1 Release CI** — `auths` (cross-compile the `auths-mcp-gateway` crate for darwin-arm64/x64 + linux-x64) → `auths-mcp` (`packages/auths-mcp/build.mjs` bundles into `vendor/<platform>/`; publish `@auths/mcp` to npm).
+- **M7.1 Release CI** — `auths` (cross-compile the `auths-mcp-gateway` crate for darwin-arm64/x64 + linux-x64) → `auths-mcp` (`packages/auths-mcp/build.mjs` bundles into `vendor/<platform>/`; publish `@auths-dev/mcp` to npm).
 - **M7.2 brew + uvx** — `auths-mcp` — the fast-follows the README already promises.
 - **M7.3 Client glue verified** — `auths-mcp/clients/` — tested `mcp.json` for Claude Desktop / Code / Cursor / Codex (M1.3's output, verified on a clean machine).
 - **M7.4 Onboarding docs** — `auths-mcp/docs/` — 5-min quickstart + real-money opt-in + troubleshooting; the README matches the gate (M1.4).
@@ -299,7 +299,7 @@ things you didn't write" lands without saying it.
 
 ### Cold open — "One line. A tool you didn't write. Bounded."
 ```
-npx @auths/mcp wrap --scope fs.read --budget $5 --ttl 30m -- \
+npx @auths-dev/mcp wrap --scope fs.read --budget $5 --ttl 30m -- \
   npx -y @modelcontextprotocol/server-filesystem ~/project
 ```
 A live agent is now hard-bounded against a **stock** server the author never heard of auths.

@@ -1,9 +1,13 @@
 {
-  "name": "@auths/mcp",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@auths-dev/mcp",
+  "version": "0.1.0",
   "description": "The bounded-agent MCP gateway launcher — prepend `auths wrap …` to any MCP server to bound a live agent's tool calls to a scope, budget, and TTL with cryptographic delegation.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/auths-dev/auths-mcp.git"
+  },
+  "homepage": "https://auths.dev",
   "type": "module",
   "bin": {
     "auths-mcp": "packages/auths-mcp/bin/auths-mcp.mjs"
@@ -11,6 +15,9 @@
   "files": [
     "packages/auths-mcp"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "node packages/auths-mcp/build.mjs",
     "smoke": "bash run.sh",

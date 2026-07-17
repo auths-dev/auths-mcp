@@ -12,7 +12,7 @@ client's config — the whole adoption story is *editing one line you already ha
 ```json
 "filesystem": {
   "command": "npx",
-  "args": ["-y", "@auths/mcp", "wrap", "--scope", "fs.read", "--budget", "$5", "--ttl", "30m",
+  "args": ["-y", "@auths-dev/mcp", "wrap", "--scope", "fs.read", "--budget", "$5", "--ttl", "30m",
            "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/Users/me/proj"]
 }
 ```

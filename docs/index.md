@@ -37,7 +37,7 @@ never into receipts, never into logs.
 
 !!! note "Invocation"
     `auths-mcp` is the installed gateway binary. If you haven't installed it, the
-    no-install form is `npx @auths/mcp wrap …`.
+    no-install form is `npx @auths-dev/mcp wrap …`.
 
 ## 2. Real by default — test mode is the single opt-in
 

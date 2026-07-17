@@ -1,4 +1,4 @@
-# @auths/mcp — the bounded-agent MCP gateway
+# @auths-dev/mcp — the bounded-agent MCP gateway
 
 > Prepend `auths wrap …` to any MCP server and a live agent's tool calls are
 > bounded to a **scope**, a **budget**, and a **TTL** by cryptographic delegation —
@@ -18,7 +18,7 @@ install with no toolchain.
 // in your MCP client config — wrap a server line you already have
 "filesystem": {
   "command": "npx",
-  "args": ["-y", "@auths/mcp", "wrap", "--scope", "fs.read", "--budget", "$5", "--ttl", "30m",
+  "args": ["-y", "@auths-dev/mcp", "wrap", "--scope", "fs.read", "--budget", "$5", "--ttl", "30m",
            "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/Users/me/proj"]
 }
 ```
@@ -44,8 +44,16 @@ real (`auths-mcp-{core,gateway,server}` in the `auths` monorepo):
   resolves the launcher, the launcher resolves the prebuilt gateway binary, and the
   gateway is driven in replay mode over a frozen transcript — re-deriving each call's
   verdict from the signed chain and exiting non-zero on ANY divergence (no fake
-  `exit 0`). Today it runs via `GATEWAY_BIN` against the monorepo's `auths-mcp-gateway`;
-  bundling the npm-vendored per-platform binary is the remaining distribution step (M7).
+  `exit 0`). It resolves the gateway the way a user's `npx` run does: a locally built
+  `../auths/target/release` binary if present, else the npm-vendored
+  `vendor/<platform>/` tree.
+- **Distribution**: `.github/workflows/release.yml` vendors `auths-mcp-gateway` (plus
+  the `auths` CLI and `auths-sign`, which the wrap path shells to build the delegation
+  chain) for `linux-x64`, `linux-arm64`, and `darwin-arm64` from a pinned,
+  SHA256-verified `auths` monorepo release, re-runs the full smoke against that exact
+  tree, and publishes `@auths-dev/mcp` (dispatch-only, dry-run by default). It fails
+  closed on any release older than the first one that ships the gateway in its
+  tarballs (v0.1.3 does not).
 - The scenario configs in `examples/scenarios/` and the transcript in `examples/replay/`
   drive that gate; the payment adapters in `examples/payments/` are built (hermetic path
   green; the live x402 settle is pending the EIP-3009 rewrite — see `docs/plans/`).
@@ -53,7 +61,7 @@ real (`auths-mcp-{core,gateway,server}` in the `auths` monorepo):
 ## Layout
 
 ```
-packages/auths-mcp/   the @auths/mcp launcher (prebuilt-binary-per-platform)
+packages/auths-mcp/   the @auths-dev/mcp launcher (prebuilt-binary-per-platform)
 clients/              config glue: Claude Desktop / Claude Code / Cursor / Codex
 examples/             live show + --check replay (the probe) + 3 scenario configs
 run.sh                the install-and-wrap smoke = the federated gate

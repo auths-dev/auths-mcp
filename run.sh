@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run.sh — the @auths/mcp install-and-wrap smoke (the [sculpts.auths-mcp] gate).
+# run.sh — the @auths-dev/mcp install-and-wrap smoke (the [sculpts.auths-mcp] gate).
 #
 #   ./run.sh           the live show (a real model behind the gateway) — not built yet
 #   ./run.sh --check    the hermetic smoke: install the way a user would, wrap a stub
@@ -8,11 +8,13 @@
 #                       runs as the federated wrapper gate.
 #   ./run.sh reset      tear down scratch state.
 #
-# HONEST SCAFFOLD: the product isn't built, so `--check` legitimately exits non-zero
-# (RED). This is a REAL check — it resolves the launcher, the launcher resolves a
-# gateway binary, and the gateway is driven in replay mode against a transcript whose
-# verdicts we assert. Every one of those steps fails today because the gateway is a
-# stub. It will pass once the wrapper + gateway work; there is NO fake `exit 0`.
+# The gateway is real (`auths-mcp-{core,gateway}` in the `auths` monorepo) and
+# `--check` is GREEN end-to-end: the replay verdicts, the offline audits, the
+# tamper / dropped-record / truncation red-teams, and the live-wire checks. It
+# resolves the gateway the way a user's `npx` run does — a locally built
+# `../auths/target/release` binary if present, else the npm-vendored
+# `vendor/<platform>/` tree the release workflow stages. Any divergence exits
+# non-zero; there is NO fake `exit 0`.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -25,6 +27,13 @@ TRANSCRIPT="${TRANSCRIPT:-$HERE/examples/replay/transcript.json}"
 # release CI's vendored binary will later be found. Default to the auths monorepo's
 # release output (sibling repo), overridable for CI staging.
 : "${GATEWAY_BIN:=$HERE/../auths/target/release/auths-mcp-gateway}"
+# No locally built gateway? Fall back to the npm-vendored per-platform binary —
+# the same resolution order as the launcher, so the smoke can gate the exact
+# tree a real `npx` user runs (this is what the release CI exercises).
+if [ ! -x "$GATEWAY_BIN" ]; then
+  _vendored="$HERE/packages/auths-mcp/vendor/$(node -p 'process.platform + "-" + process.arch' 2>/dev/null)/auths-mcp-gateway"
+  [ -x "$_vendored" ] && GATEWAY_BIN="$_vendored"
+fi
 export GATEWAY_BIN
 
 # A throwaway, fully self-contained sandbox under .scratch/ (gitignored). The
@@ -142,7 +151,7 @@ ok "audit red-team GREEN — the offline audit independently caught a tampered p
 audit_args="$(printf '%s' "$out" | sed -n 's/.*audit-cmd: //p' | head -1)"
 [ -n "$audit_args" ] || fail "verify-spend RED — the replay emitted no audit-cmd line to re-run"
 # shellcheck disable=SC2086
-vs_out="$("$GATEWAY_BIN" verify-spend $audit_args 2>&1 || true)"
+vs_out="$(node "$LAUNCHER" verify-spend $audit_args 2>&1 || true)"
 printf '%s' "$vs_out" | grep -q "verify-spend: consistent" \
   || { printf '%s\n' "$vs_out" | sed 's/^/    /'; fail "verify-spend RED — the standalone CLI did not re-audit the log as consistent"; }
 ok "verify-spend CLI GREEN — a standalone process re-audited the gateway-written log offline as consistent"
@@ -158,7 +167,7 @@ dropped_log="$log_path.dropped"
 tail -n +2 "$log_path" > "$dropped_log"
 dropped_args="$(printf '%s' "$audit_args" | sed "s#--log $log_path#--log $dropped_log#")"
 # shellcheck disable=SC2086
-drop_out="$("$GATEWAY_BIN" verify-spend $dropped_args 2>&1 || true)"
+drop_out="$(node "$LAUNCHER" verify-spend $dropped_args 2>&1 || true)"
 printf '%s' "$drop_out" | grep -q "dropped-call" \
   || { printf '%s\n' "$drop_out" | sed 's/^/    /'; fail "back-link RED — a dropped log record was NOT caught (no dropped-call)"; }
 ok "back-link red-team GREEN — a dropped log record was caught (dropped-call)"
@@ -237,7 +246,7 @@ trunc_log="$tt_log.truncated"
 sed '$d' "$tt_log" > "$trunc_log"
 tt_trunc_args="$(printf '%s' "$tt_args" | sed "s#--log $tt_log#--log $trunc_log#")"
 # shellcheck disable=SC2086
-tt_vs="$("$GATEWAY_BIN" verify-spend $tt_trunc_args 2>&1 || true)"
+tt_vs="$(node "$LAUNCHER" verify-spend $tt_trunc_args 2>&1 || true)"
 printf '%s' "$tt_vs" | grep -q "budget-mismatch" \
   || { printf '%s\n' "$tt_vs" | sed 's/^/    /'; fail "tail-truncation RED — a dropped tail record was NOT caught (no budget-mismatch)"; }
 ok "tail-truncation red-team GREEN — a dropped tail record was caught by the durable cross-check (budget-mismatch)"
