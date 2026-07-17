@@ -1,0 +1,100 @@
+name: Release
+
+# Publish @auths-dev/mcp to npm with the per-platform gateway binaries vendored
+# from a PINNED auths monorepo release. The org's release posture:
+#   - workflow_dispatch only, dry-run by default
+#   - the auths version is pinned explicitly — `latest` is never resolved
+#   - every downloaded asset is SHA256-verified against the release's own
+#     .sha256, and a release whose tarball lacks the gateway fails closed
+#     (v0.1.3 and earlier predate the gateway shipping in release assets)
+#
+# The vendor tree ships THREE binaries per platform: the launcher execs
+# `auths-mcp-gateway`, and the gateway's wrap path shells `auths` and
+# `auths-sign` beside itself to build the delegation chain and sign as the
+# agent. A gateway vendored alone resolves, then dies at chain build.
+#
+# darwin-x64 and win32 are deliberately absent: the monorepo release builds
+# no Intel-mac asset, and the launcher does not resolve a `.exe` — both are
+# tracked follow-ups, not silent gaps.
+
+on:
+  workflow_dispatch:
+    inputs:
+      auths_version:
+        description: "auths monorepo release to vendor binaries from (e.g. 0.1.4). Must be a release whose tarballs ship auths-mcp-gateway — 0.1.3 and earlier do not."
+        required: true
+      dry_run:
+        description: "Dry run (verify everything, npm publish --dry-run)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm --provenance
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Vendor per-platform binaries (checksum-verified, fail-closed)
+        run: |
+          set -euo pipefail
+          version="${{ inputs.auths_version }}"
+          base="https://github.com/auths-dev/auths/releases/download/v${version}"
+
+          vendor() {
+            platform="$1" asset="$2"
+            curl -fsSLO "$base/$asset.tar.gz"
+            curl -fsSLO "$base/$asset.tar.gz.sha256"
+            shasum -a 256 -c "$asset.tar.gz.sha256"
+            dest="packages/auths-mcp/vendor/$platform"
+            mkdir -p "$dest"
+            tar -xzf "$asset.tar.gz" -C "$dest"
+            rm -f "$dest/auths-verify" # the gateway never shells it — keep the package lean
+            for bin in auths-mcp-gateway auths auths-sign; do
+              test -x "$dest/$bin" || {
+                echo "::error::$asset.tar.gz ships no $bin — pin an auths release that includes it (>= the release after v0.1.3)"
+                exit 1
+              }
+            done
+          }
+
+          vendor linux-x64 auths-linux-x86_64
+          vendor linux-arm64 auths-linux-aarch64
+          vendor darwin-arm64 auths-macos-aarch64
+
+      - name: Build (launcher sanity)
+        run: npm run build
+
+      # The repo's own gate, against the exact tree a real `npx` user runs: with no
+      # locally built gateway, run.sh resolves the vendored linux-x64 binaries the
+      # same way the launcher does — replay verdicts, offline audits, the tamper /
+      # dropped-record / truncation red-teams, and the live-wire checks.
+      - name: Gate — install-and-wrap smoke over the vendored tree
+        run: bash run.sh --check
+
+      - name: Show what ships
+        run: npm pack --dry-run
+
+      - name: Publish (dry run)
+        if: ${{ inputs.dry_run }}
+        run: npm publish --ignore-scripts --provenance --access public --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        run: npm publish --ignore-scripts --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
