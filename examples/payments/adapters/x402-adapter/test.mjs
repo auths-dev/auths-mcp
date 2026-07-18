@@ -146,7 +146,10 @@ await t("the REAL live POST path (not a reconstructed body) carries no key — f
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, opts) => {
     captured = { url: String(url), body: String(opts?.body ?? "") };
-    return { ok: true, json: async () => ({ success: true, network: "base-sepolia", transaction: "0xdeadbeef" }) };
+    return new Response(
+      JSON.stringify({ success: true, network: "base-sepolia", transaction: "0xdeadbeef" }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
   };
   try {
     const r = await settle({
@@ -176,6 +179,25 @@ await t("signExactEvmPayment refuses a missing/garbage key and a non-address pay
   await assert.rejects(() => signExactEvmPayment({ requirements: reqs, env: { X402_WALLET_PRIVATE_KEY: "not-a-key" } }), /not a 0x-prefixed 32-byte hex key/);
   const TEST_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
   await assert.rejects(() => signExactEvmPayment({ requirements: { ...reqs, payTo: "" }, env: { X402_WALLET_PRIVATE_KEY: TEST_KEY } }), /payTo .* is not a 0x address/);
+});
+
+await t("a DECLINED facilitator settle surfaces errorReason, never a bare HTTP status", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({ success: false, errorReason: "insufficient_funds", network: "base-sepolia" }),
+      { status: 402, headers: { "content-type": "application/json" } },
+    );
+  const TEST_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+  try {
+    await assert.rejects(
+      () => settle({ amountAtomic: 10_000, env: { X402_WALLET_PRIVATE_KEY: TEST_KEY, X402_FACILITATOR_URL: "http://facilitator.test", X402_PAY_TO: "0x0000000000000000000000000000000000000001" } }),
+      /insufficient_funds.*HTTP 402/s,
+      "the facilitator's own errorReason must reach the thrown error",
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 if (failures > 0) {

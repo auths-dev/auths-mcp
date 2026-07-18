@@ -5,7 +5,7 @@ custody a key for live USDC settlement **without ever touching your MetaMask key
 throwaway testnet USDC here.
 
 > **An "x402 wallet" is just a standard EVM keypair** — there is no special format. This one
-> was generated locally; the private key lives in `auths/.env` (gitignored) and is **never**
+> was generated locally; the private key lives in `../auths/.env` (gitignored) and is **never**
 > written into this (tracked) doc.
 
 ## The wallet
@@ -15,7 +15,7 @@ throwaway testnet USDC here.
 | **Address** (public — fund this) | `0x7dcbaC276a01cb2e73Cd0E27bC03C035cFa5F662` |
 | Network | **base-sepolia** (Base L2 testnet) — *not* Ethereum Sepolia |
 | Asset | **USDC**, contract `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
-| Private key | in `auths/.env` as `X402_WALLET_PRIVATE_KEY` (gitignored, never here) |
+| Private key | in `../auths/.env` as `X402_WALLET_PRIVATE_KEY` (gitignored, never here) |
 
 ## Env vars (all in `auths/.env`, which is gitignored)
 

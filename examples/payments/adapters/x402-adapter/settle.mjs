@@ -111,11 +111,28 @@ async function liveTestnetSettle({ amountAtomic, network, env }) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ x402Version: 1, paymentPayload, paymentRequirements: requirements }),
   });
-  const settlement = await res.json();
+  // Parse defensively: a declining facilitator may answer non-JSON — keep the raw
+  // body so the reason is never reduced to a bare status code.
+  const rawBody = await res.text();
+  let settlement = null;
+  try {
+    settlement = JSON.parse(rawBody);
+  } catch {
+    settlement = null;
+  }
   if (!res.ok || settlement?.success !== true) {
-    const msg = settlement?.error ?? `HTTP ${res.status}`;
+    // Surface the facilitator's OWN reason: the x402 SettleResponse names it
+    // `errorReason` (machine-readable, e.g. insufficient_funds); some
+    // facilitators use `error`. The HTTP status rides along as context only —
+    // it is never the whole error.
+    const reason =
+      settlement?.errorReason ??
+      settlement?.error ??
+      (rawBody.trim() ? rawBody.trim().slice(0, 200) : "no response body");
     // Never fabricate a settle: a failed facilitator settle is an error, not a faked tx.
-    throw new Error(`x402 facilitator settle failed (base-sepolia): ${msg}`);
+    throw new Error(
+      `x402 facilitator settle failed (base-sepolia): ${reason} [HTTP ${res.status}]`,
+    );
   }
   if (String(settlement.network) !== network) {
     throw new Error(`x402 facilitator settled on ${settlement.network}, expected ${network}`);

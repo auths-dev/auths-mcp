@@ -8,10 +8,10 @@ PATCH the file it was only asked to review. That emergent out-of-bounds
 `write_file` is what the gateway refuses at the boundary.
 
   ┌─────────────┐  tools/call   ┌──────────────────────────┐
-  │   Claude    │ ───────────▶  │  this harness (recorder)  │
-  │ (real model)│ ◀───────────  │  appends each call to the │
-  └─────────────┘  tool_result  │  frozen transcript        │
-                                 └──────────────────────────┘
+  │   Claude    │ ───────────▶  │  this harness (recorder) │
+  │ (real model)│ ◀───────────  │  appends each call to the│
+  └─────────────┘  tool_result  │  frozen transcript       │
+                                └──────────────────────────┘
 
 WHAT THIS IS — AND IS NOT:
 
