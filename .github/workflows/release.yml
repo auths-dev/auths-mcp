@@ -74,6 +74,13 @@ jobs:
           vendor linux-arm64 auths-linux-aarch64
           vendor darwin-arm64 auths-macos-aarch64
 
+      - name: Set package version to the vendored auths release
+        run: |
+          set -euo pipefail
+          version="${{ inputs.auths_version }}"
+          npm version "$version" --no-git-tag-version --allow-same-version
+          echo "publishing @auths-dev/mcp@$version (vendors auths v$version)"
+
       - name: Build (launcher sanity)
         run: npm run build
 
@@ -93,8 +100,19 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Skip publish if this version is already on npm
+        id: published
+        run: |
+          v=$(node -p "require('./package.json').version")
+          if npm view "@auths-dev/mcp@$v" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "@auths-dev/mcp@$v already published — skipping"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.published.outputs.exists != 'true' }}
         run: npm publish --ignore-scripts --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
