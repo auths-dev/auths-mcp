@@ -240,10 +240,13 @@ function chainIdFor(network) {
 async function hermeticSettle({ amountAtomic, network, env }) {
   assertTestnetOnly(network);
   const fixturePath = env.X402_SETTLEMENT_FIXTURE ?? defaultFixturePath(env);
-  const raw = await readFile(fixturePath, "utf8");
-  const fixture = JSON.parse(raw);
-  const requirements = fixture.requirements ?? {};
-  const settlement = fixture.settlement ?? {};
+  const fixture = await loadFixture(fixturePath);
+  // Shallow-copy per call so overlaying the amount/network never mutates the shared cache. The
+  // fixture is a static recorded shape, so reading+parsing it ONCE (not per call) keeps the
+  // adapter's cost to the transport + compute a real downstream would have — a per-call disk
+  // read is a harness artifact, not representative of an on-chain/network settle.
+  const requirements = { ...(fixture.requirements ?? {}) };
+  const settlement = { ...(fixture.settlement ?? {}) };
   if (isAtomicAmount(amountAtomic)) {
     requirements.maxAmountRequired = String(amountAtomic);
   }
@@ -251,6 +254,16 @@ async function hermeticSettle({ amountAtomic, network, env }) {
   requirements.network = network;
   settlement.network = network;
   return { rail: "x402", requirements, settlement };
+}
+
+/** The parsed settlement fixture, read from disk and parsed ONCE per path and cached. */
+const _fixtureCache = new Map();
+async function loadFixture(fixturePath) {
+  const cached = _fixtureCache.get(fixturePath);
+  if (cached) return cached;
+  const parsed = JSON.parse(await readFile(fixturePath, "utf8"));
+  _fixtureCache.set(fixturePath, parsed);
+  return parsed;
 }
 
 /** Resolve the recorded fixture the hermetic settle recalls. The gateway suite holds the
