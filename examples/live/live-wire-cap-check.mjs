@@ -159,7 +159,7 @@ async function main() {
   const args = ["verify-spend", ...m[1].trim().split(/\s+/)];
   const vs = spawnSync(GATEWAY_BIN, args, { env, encoding: "utf8" });
   const vsOut = (vs.stdout || "") + (vs.stderr || "");
-  if (!/verify-spend: consistent\b/.test(vsOut) || !/\$1\.50/.test(vsOut))
+  if (!/verify-spend: (self-)?consistent\b/.test(vsOut) || !/\$1\.50/.test(vsOut))
     fail(`the cap log did NOT re-verify as consistent with exactly the $1.50 declared spend:\n${vsOut}`);
   ok("verify-spend GREEN — only the declared $1.50 advanced the cap; the bypass settled nothing");
 

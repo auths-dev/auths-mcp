@@ -181,7 +181,7 @@ async function main() {
   const args = ["verify-spend", ...m[1].trim().split(/\s+/)];
   const vs = spawnSync(GATEWAY_BIN, args, { env, encoding: "utf8" });
   const vsOut = (vs.stdout || "") + (vs.stderr || "");
-  if (!/verify-spend: consistent\b/.test(vsOut))
+  if (!/verify-spend: (self-)?consistent\b/.test(vsOut))
     fail(`PARK — the real settle log did NOT re-verify as consistent:\n${vsOut}`);
   ok("verify-spend GREEN — the real agent-signed settlement re-verified offline as consistent");
   console.log(`\nREAL_TX_HASH=${tx}`);

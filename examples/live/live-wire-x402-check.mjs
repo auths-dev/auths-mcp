@@ -154,7 +154,7 @@ async function main() {
   const vs = spawnSync(GATEWAY_BIN, args, { env, encoding: "utf8" });
   const vsOut = (vs.stdout || "") + (vs.stderr || "");
   // The audit must be consistent AND have summed the AGENT-SIGNED $1.50 from the settlement.
-  if (!/verify-spend: consistent\b/.test(vsOut) || !/\$1\.50/.test(vsOut))
+  if (!/verify-spend: (self-)?consistent\b/.test(vsOut) || !/\$1\.50/.test(vsOut))
     fail(`the live metered log did NOT re-verify as consistent with the signed $1.50:\n${vsOut}`);
   ok("verify-spend GREEN — the agent-signed $1.50 settlement re-verified offline as consistent");
   console.log(

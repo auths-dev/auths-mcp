@@ -169,7 +169,7 @@ async function main() {
   // Assert the COUNT too, not just the verdict code: this session brokered one in-scope call and
   // refused one out-of-scope call, and both are signed + persisted, so the audit must cover 2
   // records. Asserting the count catches an empty/truncated log that would trivially audit clean.
-  if (!/verify-spend: consistent\b/.test(vsOut) || !/\b2 call\(s\)/.test(vsOut))
+  if (!/verify-spend: (self-)?consistent\b/.test(vsOut) || !/\b2 call\(s\)/.test(vsOut))
     fail(`the live spend log did NOT re-verify as consistent over both records:\n${vsOut}`);
   ok("verify-spend GREEN — the live-wire spend log (1 allowed + 1 refused, both signed) re-verified offline as consistent");
   console.log(
