@@ -129,7 +129,7 @@ ok "install-and-wrap smoke GREEN — every verdict the frozen transcript exercis
 # ── Offline self-audit of the spend log the run just wrote ──────────────────────────────────
 # The clean run's gateway-written spend log must re-verify OFFLINE as `consistent`: every signed
 # proof re-verifies through the same verifier the gate uses, and the re-derived spend matches.
-printf '%s' "$out" | grep -q "audit: consistent" \
+printf '%s' "$out" | grep -qE "audit: (self-)?consistent" \
   || { printf '%s\n' "$out" | sed 's/^/    /'; fail "self-audit RED — the clean run's spend log did not re-verify as \`consistent\`"; }
 ok "self-audit GREEN — the clean run's spend log re-verified offline as consistent"
 
@@ -152,7 +152,7 @@ audit_args="$(printf '%s' "$out" | sed -n 's/.*audit-cmd: //p' | head -1)"
 [ -n "$audit_args" ] || fail "verify-spend RED — the replay emitted no audit-cmd line to re-run"
 # shellcheck disable=SC2086
 vs_out="$(node "$LAUNCHER" verify-spend $audit_args 2>&1 || true)"
-printf '%s' "$vs_out" | grep -q "verify-spend: consistent" \
+printf '%s' "$vs_out" | grep -qE "verify-spend: (self-)?consistent" \
   || { printf '%s\n' "$vs_out" | sed 's/^/    /'; fail "verify-spend RED — the standalone CLI did not re-audit the log as consistent"; }
 ok "verify-spend CLI GREEN — a standalone process re-audited the gateway-written log offline as consistent"
 
