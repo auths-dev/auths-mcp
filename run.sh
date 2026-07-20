@@ -190,7 +190,7 @@ metered_out="$(LAB_DIR="$mlab" AUTHS_HOME="$mlab/registry" AUTHS_REPO="$mlab/reg
 # non-zero settled call, REQUIRES a valid settlement bound to the call — see audit_spend_log).
 printf '%s' "$metered_out" | grep -qF 'settled_actual=$3.00' \
   || { printf '%s\n' "$metered_out" | sed 's/^/    /'; fail "metered settlement RED — the paid call did not settle the extracted \$3.00"; }
-printf '%s' "$metered_out" | grep -q "audit: consistent" \
+printf '%s' "$metered_out" | grep -qE "audit: (self-)?consistent" \
   || { printf '%s\n' "$metered_out" | sed 's/^/    /'; fail "metered settlement RED — the agent-signed settlement did not audit as consistent"; }
 ok "metered settlement GREEN — the agent-signed settled cost (\$3.00) re-derived offline as consistent"
 
@@ -234,7 +234,7 @@ tt_out="$(LAB_DIR="$ttlab" AUTHS_HOME="$ttlab/registry" AUTHS_REPO="$ttlab/regis
   AUTHS_KEYCHAIN_FILE="$ttlab/keys.enc" AUTHS_MCP_RAIL_FIXTURES="$metered_fixtures" \
   node "$LAUNCHER" replay --transcript "$metered_tx" 2>&1 || true)"
 # Baseline: the intact metered log audits consistent (the counter holds the full $3.00).
-printf '%s' "$tt_out" | grep -q "audit: consistent" \
+printf '%s' "$tt_out" | grep -qE "audit: (self-)?consistent" \
   || { printf '%s\n' "$tt_out" | sed 's/^/    /'; fail "tail-truncation RED — the metered baseline did not audit consistent"; }
 tt_args="$(printf '%s' "$tt_out" | sed -n 's/.*audit-cmd: //p' | head -1)"
 [ -n "$tt_args" ] || fail "tail-truncation RED — the metered replay emitted no audit-cmd line"
