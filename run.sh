@@ -168,9 +168,9 @@ tail -n +2 "$log_path" > "$dropped_log"
 dropped_args="$(printf '%s' "$audit_args" | sed "s#--log $log_path#--log $dropped_log#")"
 # shellcheck disable=SC2086
 drop_out="$(node "$LAUNCHER" verify-spend $dropped_args 2>&1 || true)"
-printf '%s' "$drop_out" | grep -q "dropped-call" \
-  || { printf '%s\n' "$drop_out" | sed 's/^/    /'; fail "back-link RED — a dropped log record was NOT caught (no dropped-call)"; }
-ok "back-link red-team GREEN — a dropped log record was caught (dropped-call)"
+printf '%s' "$drop_out" | grep -qE "chain-break|dropped-call" \
+  || { printf '%s\n' "$drop_out" | sed 's/^/    /'; fail "back-link RED — a dropped log record was NOT caught (no chain-break)"; }
+ok "back-link red-team GREEN — a dropped log record was caught (chain-break)"
 
 # ── Metered settlement: a paid call signs its cost, and the offline audit reads the SIGNED amount ──
 # A metered Stripe test-mode charge ($3.00 extracted from the recorded response) settles in-budget;
