@@ -84,6 +84,18 @@ jobs:
       - name: Build (launcher sanity)
         run: npm run build
 
+      # run.sh asserts every verdict token it greps for against the contracts/v1
+      # manifest before trusting it; on the runner there is no sibling auths
+      # checkout, so pin the manifest to the EXACT release being vendored.
+      - name: Pin the verdict manifest to the vendored auths release
+        run: |
+          set -euo pipefail
+          version="${{ inputs.auths_version }}"
+          curl -fsSL -o /tmp/contracts-v1.json \
+            "https://raw.githubusercontent.com/auths-dev/auths/v${version}/schemas/contracts-v1.json"
+          jq -e '.version == "contracts/v1"' /tmp/contracts-v1.json >/dev/null
+          echo "AUTHS_VERDICTS_JSON=/tmp/contracts-v1.json" >> "$GITHUB_ENV"
+
       # The repo's own gate, against the exact tree a real `npx` user runs: with no
       # locally built gateway, run.sh resolves the vendored linux-x64 binaries the
       # same way the launcher does — replay verdicts, offline audits, the tamper /

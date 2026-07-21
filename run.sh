@@ -70,6 +70,25 @@ say()  { printf '▸ %s\n' "$*"; }
 fail() { printf '✗ %s\n' "$*" >&2; exit 1; }
 ok()   { printf '✓ %s\n' "$*"; }
 
+# The verdict manifest (contracts/v1) is the single source of truth for verdict
+# strings — shipped as conformance/verdicts.json in @auths-dev/sdk, generated from
+# schemas/contracts-v1.json in the auths monorepo. Before grepping for any verdict
+# token, assert it EXISTS in the manifest: a renamed or fossil verdict fails the
+# smoke loudly instead of silently never matching.
+VERDICTS_JSON="${AUTHS_VERDICTS_JSON:-$HERE/../auths/schemas/contracts-v1.json}"
+
+require_verdict_manifest() {
+  command -v jq >/dev/null 2>&1 || fail "jq not found — needed to assert verdict tokens against the manifest"
+  [ -f "$VERDICTS_JSON" ] || fail "verdict manifest missing: $VERDICTS_JSON (override with AUTHS_VERDICTS_JSON=…)"
+  jq -e '.version == "contracts/v1" and (.verdicts | type == "object")' "$VERDICTS_JSON" >/dev/null 2>&1 \
+    || fail "verdict manifest malformed (want {\"version\":\"contracts/v1\",\"verdicts\":{…}}): $VERDICTS_JSON"
+}
+
+assert_verdict_known() {
+  jq -e --arg v "$1" 'any(.verdicts[][]; . == $v)' "$VERDICTS_JSON" >/dev/null \
+    || fail "verdict \"$1\" is not defined by the manifest ($VERDICTS_JSON) — stale token in run.sh or the transcript"
+}
+
 cmd="${1:-}"
 
 if [ "$cmd" = "reset" ]; then
@@ -90,6 +109,12 @@ say "install-and-wrap smoke — wrap a stub downstream, replay a transcript, ass
 command -v node >/dev/null 2>&1 || fail "node not found — the launcher needs Node ≥18"
 [ -f "$LAUNCHER" ] || fail "launcher missing: $LAUNCHER (run \`npm run build\`)"
 [ -f "$TRANSCRIPT" ] || fail "replay transcript missing: $TRANSCRIPT"
+
+# Every verdict token this smoke greps for must exist in the manifest.
+require_verdict_manifest
+for v in consistent self-consistent tampered-proof chain-break budget-mismatch; do
+  assert_verdict_known "$v"
+done
 
 # Start from a clean sandbox: `id create` (org root) is non-idempotent — a stale
 # registry from a prior run fails "Identity already exists". Each --check is hermetic.
@@ -120,6 +145,7 @@ expects="$(grep -oE '"expect"[[:space:]]*:[[:space:]]*"[a-z-]+"' "$TRANSCRIPT" \
 [ -n "$expects" ] || fail "replay smoke RED — the transcript declares no \`expect\` verdicts to assert"
 
 for verdict in $expects; do
+  assert_verdict_known "$verdict"
   printf '%s' "$out" | grep -qE "(^|[^a-z-])$verdict([^a-z-]|\$)" \
     || fail "replay smoke RED — transcript expects verdict \"$verdict\" but it is absent from the gateway output"
 done
@@ -157,7 +183,7 @@ printf '%s' "$vs_out" | grep -qE "verify-spend: (self-)?consistent" \
 ok "verify-spend CLI GREEN — a standalone process re-audited the gateway-written log offline as consistent"
 
 # Red-team: a DROPPED log record is caught. Each record's signed Auths-Prev links to the prior one,
-# so removing a record breaks the chain and the audit reports dropped-call — where before only an
+# so removing a record breaks the chain and the audit reports chain-break — where before only an
 # EDITED record was caught (via its broken signature), a hostile operator could silently truncate.
 say "back-link red-team: dropping a record from the log, then re-auditing…"
 log_path="$(printf '%s' "$audit_args" | sed -n 's/.*--log \([^ ]*\).*/\1/p')"
@@ -168,7 +194,7 @@ tail -n +2 "$log_path" > "$dropped_log"
 dropped_args="$(printf '%s' "$audit_args" | sed "s#--log $log_path#--log $dropped_log#")"
 # shellcheck disable=SC2086
 drop_out="$(node "$LAUNCHER" verify-spend $dropped_args 2>&1 || true)"
-printf '%s' "$drop_out" | grep -qE "chain-break|dropped-call" \
+printf '%s' "$drop_out" | grep -q "chain-break" \
   || { printf '%s\n' "$drop_out" | sed 's/^/    /'; fail "back-link RED — a dropped log record was NOT caught (no chain-break)"; }
 ok "back-link red-team GREEN — a dropped log record was caught (chain-break)"
 
@@ -223,7 +249,7 @@ printf '%s' "$rb_out" | grep -q "audit: tampered-proof" \
 ok "metered rebind red-team GREEN — a settlement bound to the wrong call was caught (tampered-proof)"
 
 # Red-team: truncate the TAIL of a metered log (drop the most-recent settled record). The survivors'
-# back-link is still intact — so this is NOT dropped-call — but the durable cross-rail counter still
+# back-link is still intact — so this is NOT chain-break — but the durable cross-rail counter still
 # holds the full settled high-water the run advanced, so the re-derived total falls BELOW it and the
 # audit reports budget-mismatch. This catches the tail-truncation the back-link alone cannot, by
 # cross-checking the re-derived total against the verifier-held counter (which truncating the log
